@@ -1,0 +1,1 @@
+export default function Stats() { return <div>Player Stats Page</div>; }

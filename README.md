@@ -1,2 +1,2 @@
-# fantasy-football-frontend
-fantasy football
+# Fantasy Football Frontend
+A headless frontend for family fantasy football.

@@ -1,0 +1,1 @@
+export default function Trophies() { return <div>League Trophy Board</div>; }
