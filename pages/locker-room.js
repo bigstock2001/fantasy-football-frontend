@@ -2,10 +2,27 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
-import { apiGet } from "../lib/api";
+import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
 
-const LEAGUE_ID = process.env.NEXT_PUBLIC_MFL_LEAGUE_ID || "61408";
+const LEAGUE_ID = "61408";
 
+// --- helpers ---------------------------------------------------------
+function readCookie(name) {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function writeCookie(name, value, days = 365) {
+  if (typeof document === "undefined") return;
+  const exp = new Date(Date.now() + days * 86400 * 1000).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; expires=${exp}; SameSite=Lax`;
+}
+function fmtScore(s) {
+  if (s === null || s === undefined) return "-";
+  return Number.isFinite(Number(s)) ? Number(s).toFixed(1) : s;
+}
+
+// --- page ------------------------------------------------------------
 export default function LockerRoom() {
   const [standings, setStandings] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -14,22 +31,52 @@ export default function LockerRoom() {
   const [poll, setPoll] = useState(null);
   const [countdown, setCountdown] = useState(null);
 
+  const [leagueMeta, setLeagueMeta] = useState(null); // franchises (for selector)
+  const [franchiseId, setFranchiseId] = useState(null);
+
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({
-    standings: true, roster: true, matchups: true, banner: true, poll: true, countdown: true,
+    standings: true,
+    roster: true,
+    matchups: true,
+    banner: true,
+    poll: true,
+    countdown: true,
+    leagueMeta: false,
   });
 
+  // boot franchise id from cookie
+  useEffect(() => {
+    const fid =
+      readCookie("ffd_franchise") ||
+      readCookie("franchiseId") ||
+      null;
+    setFranchiseId(fid);
+  }, []);
+
   const year = useMemo(() => new Date().getFullYear(), []);
+  const draftRoomUrl = useMemo(
+    () => `https://www63.myfantasyleague.com/${year}/options?L=${LEAGUE_ID}&O=17`,
+    [year]
+  );
+  const leagueHomeUrl = useMemo(
+    () => `https://www63.myfantasyleague.com/${year}/home/${LEAGUE_ID}`,
+    [year]
+  );
 
   async function safeLoad(key, loader) {
     try {
       const data = await loader();
-      if (key === "standings") setStandings(data);
-      else if (key === "roster") setRoster(data);
-      else if (key === "matchups") setMatchups(data);
-      else if (key === "banner") setBanner(data);
-      else if (key === "poll") setPoll(data);
-      else if (key === "countdown") setCountdown(data);
+      switch (key) {
+        case "standings": setStandings(data); break;
+        case "roster": setRoster(data); break;
+        case "matchups": setMatchups(data); break;
+        case "banner": setBanner(data); break;
+        case "poll": setPoll(data); break;
+        case "countdown": setCountdown(data); break;
+        case "leagueMeta": setLeagueMeta(data); break;
+        default: break;
+      }
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
       setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
@@ -38,36 +85,72 @@ export default function LockerRoom() {
     }
   }
 
+  // initial fetches that don't depend on franchise
   useEffect(() => {
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
-    safeLoad("roster", () => apiGet(`/roster?leagueId=${LEAGUE_ID}`));
-    // Matchups: treat 404/empty as "no matchups set yet"
-    const loadMatchups = async () => {
-      try {
-        const d = await apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`);
-        if (Array.isArray(d)) return d;
-        if (d && Array.isArray(d.matchups)) return d.matchups;
-        return [];
-      } catch (err) {
-        const msg = String(err?.message || "");
-        if (msg.includes("HTTP 404") || msg.toLowerCase().includes("not found")) return [];
-        throw err;
-      }
-    };
-    safeLoad("matchups", loadMatchups);
     safeLoad("banner", () => apiGet(`/news/commissioner`));
     safeLoad("poll", () => apiGet(`/polls/active`));
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
+  }, []);
 
+  // fetch league meta (for selector) if we don't yet know franchise
+  useEffect(() => {
+    if (franchiseId) return;
+    setLoading((l) => ({ ...l, leagueMeta: true }));
+    (async () => {
+      // Hit your MFL pass-through route to get league metadata (franchises list)
+      const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}`, { cache: "no-store" });
+      if (!res.ok) {
+        setErrors((e) => ({ ...e, leagueMeta: `HTTP ${res.status}` }));
+        setLoading((l) => ({ ...l, leagueMeta: false }));
+        return;
+      }
+      const data = await res.json();
+      setLeagueMeta(data);
+      setLoading((l) => ({ ...l, leagueMeta: false }));
+    })();
+  }, [franchiseId]);
+
+  // fetch roster & matchups when we know franchise id
+  useEffect(() => {
+    if (!franchiseId) return;
+
+    setLoading((l) => ({ ...l, roster: true, matchups: true }));
+
+    safeLoad("roster", () =>
+      apiGet(`/roster?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}`)
+    );
+
+    safeLoad("matchups", () =>
+      apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`)
+    );
+
+    // live refresh
     const t = setInterval(() => {
-      safeLoad("matchups", loadMatchups);
+      safeLoad("matchups", () =>
+        apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`)
+      );
       safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     }, 30000);
     return () => clearInterval(t);
-  }, [year]);
+  }, [franchiseId]);
+
+  // Only display my game if API returns league-wide matchups
+  const myMatchups = useMemo(() => {
+    if (!Array.isArray(matchups) || !franchiseId) return matchups;
+    return matchups.filter(
+      (m) => m?.home?.id === franchiseId || m?.away?.id === franchiseId
+    );
+  }, [matchups, franchiseId]);
+
+  function onPickFranchise(e) {
+    const fid = e.target.value || null;
+    setFranchiseId(fid);
+    if (fid) writeCookie("ffd_franchise", fid);
+  }
 
   return (
-    <>
+    <div style={styles.page}>
       {/* Commissioner banner */}
       <div style={styles.bannerWrap}>
         {loading.banner ? (
@@ -79,6 +162,17 @@ export default function LockerRoom() {
         ) : (
           <div style={styles.bannerMuted}>No commissioner news right now.</div>
         )}
+      </div>
+
+      {/* Quick links */}
+      <div style={styles.quick}>
+        <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
+          League Home (MFL)
+        </a>
+        <a href={draftRoomUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
+          Draft Room (MFL)
+        </a>
+        <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
       </div>
 
       {/* Countdown */}
@@ -146,9 +240,27 @@ export default function LockerRoom() {
         )}
       </Section>
 
-      {/* Roster */}
+      {/* Roster (your team only) */}
       <Section title="Your Roster">
-        {loading.roster ? (
+        {!franchiseId ? (
+          <div>
+            <div style={{ marginBottom: 8 }}>
+              Pick your franchise to view your roster. We’ll remember your choice on this device.
+            </div>
+            {loading.leagueMeta ? (
+              <div>Loading teams…</div>
+            ) : errors.leagueMeta ? (
+              <div style={styles.err}>Error: {errors.leagueMeta}</div>
+            ) : (
+              <select onChange={onPickFranchise} defaultValue="">
+                <option value="" disabled>Choose your team…</option>
+                {(leagueMeta?.league?.franchises?.franchise || []).map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        ) : loading.roster ? (
           <div>Loading roster…</div>
         ) : errors.roster ? (
           <div style={styles.err}>Error: {errors.roster}</div>
@@ -178,17 +290,19 @@ export default function LockerRoom() {
         )}
       </Section>
 
-      {/* Matchups / Live scores */}
+      {/* Matchups / Live (your game only) */}
       <Section title="This Week’s Matchups (Live)">
-        {loading.matchups ? (
+        {!franchiseId ? (
+          <div>Pick your team above to see your matchup.</div>
+        ) : loading.matchups ? (
           <div>Loading matchups…</div>
         ) : errors.matchups ? (
           <div style={styles.err}>Error: {errors.matchups}</div>
-        ) : !Array.isArray(matchups) || matchups.length === 0 ? (
+        ) : !Array.isArray(myMatchups) || myMatchups.length === 0 ? (
           <div>No matchups set yet.</div>
         ) : (
           <div style={styles.matchupsGrid}>
-            {matchups.map((m, i) => (
+            {myMatchups.map((m, i) => (
               <div key={m.id || i} style={styles.matchCard}>
                 <div style={styles.matchRow}>
                   <span style={styles.teamName}>{m.away?.name || "Away"}</span>
@@ -217,13 +331,8 @@ export default function LockerRoom() {
       <Section title="Message Board (Public)">
         <MessageBoard />
       </Section>
-    </>
+    </div>
   );
-}
-
-function fmtScore(s) {
-  if (s === null || s === undefined) return "-";
-  return Number.isFinite(Number(s)) ? Number(s).toFixed(1) : s;
 }
 
 function CountdownBadge({ date }) {
@@ -281,7 +390,12 @@ function PollBlock({ poll, loading, error }) {
       <div style={{ display: "grid", gap: 6 }}>
         {(poll.options || []).map((opt) => (
           <label key={opt} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="radio" name="poll" value={opt} onChange={() => setChoice(opt)} />
+            <input
+              type="radio"
+              name="poll"
+              value={opt}
+              onChange={() => setChoice(opt)}
+            />
             {opt}
           </label>
         ))}
@@ -297,6 +411,13 @@ function PollBlock({ poll, loading, error }) {
 }
 
 const styles = {
+  page: {
+    maxWidth: 1000,
+    margin: "20px auto",
+    padding: "0 16px 40px",
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+    color: "#111827",
+  },
   bannerWrap: { marginBottom: 16 },
   banner: {
     background: "#fef3c7",
@@ -315,8 +436,28 @@ const styles = {
   },
   bannerLoading: { opacity: 0.8 },
   bannerError: { color: "#b91c1c" },
+  quick: { display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" },
+  linkBtn: {
+    padding: "8px 12px",
+    borderRadius: 8,
+    background: "#111827",
+    color: "#fff",
+    textDecoration: "none",
+    border: "1px solid "#111827",
+  },
+  linkBtnOutline: {
+    padding: "8px 12px",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#111827",
+    textDecoration: "none",
+    border: "1px solid "#111827",
+  },
   err: { color: "#b91c1c" },
-  table: { width: "100%", borderCollapse: "collapse" },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
   rosterGrid: {
     listStyle: "none",
     padding: 0,
@@ -371,7 +512,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid #111827",
+    border: "1px solid "#111827",
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
