@@ -1,12 +1,8 @@
-// next.config.js
-/** @type {import('next').NextConfig} */
+﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
     return [
-      {
-        source: "/bff/:path*",
-        destination: "https://backend.footballforeverdynasty.us/:path*",
-      },
+      { source: "/bff/:path*", destination: "https://backend.footballforeverdynasty.us/:path*" },
     ];
   },
 };
