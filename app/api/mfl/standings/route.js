@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 
-const MFL_BASE   = process.env.MFL_BASE   || "https://api.myfantasyleague.com";
-const MFL_YEAR   = process.env.MFL_YEAR   || "2024";
+const MFL_BASE   = process.env.MFL_BASE || "https://api.myfantasyleague.com";
+const ENV_YEAR   = process.env.MFL_YEAR || "2025";            // <- default 2025
 const MFL_LEAGUE = process.env.MFL_LEAGUE_ID || "61408";
 
-async function mfl(type, extra = {}) {
-  const url = new URL(`${MFL_BASE}/${MFL_YEAR}/export`);
+function getYearFromReq(req) {
+  try {
+    const y = new URL(req.url).searchParams.get("year");
+    return y ? String(y) : ENV_YEAR;
+  } catch {
+    return ENV_YEAR;
+  }
+}
+
+async function mfl(type, { req, extra = {} } = {}) {
+  const year = getYearFromReq(req);
+  const url = new URL(`${MFL_BASE}/${year}/export`);
   url.searchParams.set("TYPE", type);
   url.searchParams.set("JSON", "1");
   if (MFL_LEAGUE) url.searchParams.set("L", MFL_LEAGUE);
@@ -17,12 +27,11 @@ async function mfl(type, extra = {}) {
   return r.json();
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
-    // Join raw standings with league metadata (names, divisions)
     const [stand, league] = await Promise.all([
-      mfl("leagueStandings"),
-      mfl("league")
+      mfl("leagueStandings", { req }),
+      mfl("league",          { req })
     ]);
 
     const franchises = league?.league?.franchises?.franchise ?? [];
@@ -48,9 +57,7 @@ export async function GET() {
         pointsAgainst: Number(f.pa || 0),
         streak: f.strk || "-"
       };
-    });
-
-    rows.sort((a, b) => (b.wins - a.wins) || (b.pointsFor - a.pointsFor));
+    }).sort((a, b) => (b.wins - a.wins) || (b.pointsFor - a.pointsFor));
 
     return NextResponse.json(rows, {
       headers: { "cache-control": "s-maxage=30, stale-while-revalidate=120" }
