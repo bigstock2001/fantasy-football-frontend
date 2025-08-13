@@ -2,8 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
-import CommissionerNews from "../components/CommissionerNews"; // NEW
-import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
+import CommissionerNews from "../components/CommissionerNews"; // uses /bff or NEXT_PUBLIC_API_BASE
+import { apiGet } from "../lib/api";
 
 const LEAGUE_ID = "61408";
 
@@ -82,6 +82,7 @@ export default function LockerRoom() {
 
   return (
     <div style={styles.page}>
+      {/* Quick links */}
       <div style={styles.quick}>
         <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
           League Home (MFL)
@@ -92,10 +93,12 @@ export default function LockerRoom() {
         <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
       </div>
 
+      {/* Commissioner News */}
       <Section title="Commissioner News">
         <CommissionerNews />
       </Section>
 
+      {/* Countdown */}
       <Section
         title="Draft Countdown"
         right={
@@ -120,6 +123,7 @@ export default function LockerRoom() {
         )}
       </Section>
 
+      {/* Standings */}
       <Section title="Standings">
         {loading.standings ? (
           <div>Loading standings…</div>
@@ -159,6 +163,7 @@ export default function LockerRoom() {
         )}
       </Section>
 
+      {/* Roster */}
       <Section title="Your Roster">
         {loading.roster ? (
           <div>Loading roster…</div>
@@ -190,6 +195,7 @@ export default function LockerRoom() {
         )}
       </Section>
 
+      {/* Matchups / Live scores */}
       <Section title="This Week’s Matchups (Live)">
         {loading.matchups ? (
           <div>Loading matchups…</div>
@@ -219,10 +225,12 @@ export default function LockerRoom() {
         )}
       </Section>
 
+      {/* Poll */}
       <Section title="League Poll">
         <PollBlock poll={poll} loading={loading.poll} error={errors.poll} />
       </Section>
 
+      {/* Message Board */}
       <Section title="Message Board (Public)">
         <MessageBoard />
       </Section>
@@ -371,7 +379,7 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
   },
   matchCard: {
-    border: "1px solid #e5e7eb", // <- FIXED
+    border: "1px solid #e5e7eb",
     borderRadius: 12,
     padding: 12,
     background: "#fff",
@@ -394,7 +402,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid "#111827",
+    border: "1px solid #111827", // <- FIXED
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
