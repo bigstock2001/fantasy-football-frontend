@@ -1,28 +1,32 @@
-﻿export default function Section({ title, right, children, loading, error, data }) {
+// components/Section.js
+import React from "react";
+
+export default function Section({ title, right, children }) {
   return (
-    <section style={{
-      padding: '1rem',
-      borderRadius: 12,
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      marginBottom: '1rem'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.5rem' }}>
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>{title}</h2>
-        {right ?? null}
+    <section style={styles.section}>
+      <div style={styles.header}>
+        <h2 style={styles.title}>{title}</h2>
+        <div>{right}</div>
       </div>
-
-      {loading ? <p>Loading…</p> : null}
-      {error ? <p style={{ color: 'salmon' }}>Error: {String(error)}</p> : null}
-
-      {/* If a parent passed raw data/flags, fall back to a JSON view; otherwise render children */}
-      {!loading && !error ? (
-        children ?? (
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 14 }}>
-            {data !== undefined ? JSON.stringify(data, null, 2) : null}
-          </pre>
-        )
-      ) : null}
+      <div>{children}</div>
     </section>
   );
 }
+
+const styles = {
+  section: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  title: { margin: 0, fontSize: 18 },
+};
