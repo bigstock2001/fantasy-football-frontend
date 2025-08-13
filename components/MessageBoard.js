@@ -5,17 +5,18 @@ import { apiGet, apiPost } from "../lib/api";
 export default function MessageBoard() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
   const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function load() {
     setError("");
     try {
-      const data = await apiGet("/messages");
-      setMessages(Array.isArray(data) ? data : []);
+      // next.config.js rewrites /bff/message-board -> /api/message-board
+      const data = await apiGet("/message-board");
+      setMessages(Array.isArray(data?.messages) ? data.messages : []);
     } catch (e) {
-      setError(e.message);
+      setError(e?.message || "Failed to fetch");
     } finally {
       setLoading(false);
     }
@@ -23,95 +24,84 @@ export default function MessageBoard() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000); // refresh every 15s
-    return () => clearInterval(t);
   }, []);
 
-  async function submit(e) {
+  async function onSubmit(e) {
     e.preventDefault();
     if (!text.trim()) return;
-    setPosting(true);
+    setSubmitting(true);
     setError("");
     try {
-      await apiPost("/messages", { text });
+      const res = await apiPost("/message-board", { text: text.trim() });
+      const msg = res?.message || { id: String(Date.now()), text: text.trim(), when: new Date().toISOString() };
+      setMessages((m) => [...m, msg]);
       setText("");
-      await load();
     } catch (e) {
-      setError(e.message);
+      setError(e?.message || "Failed to post");
     } finally {
-      setPosting(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div>
-      <form onSubmit={submit} style={styles.form}>
-        <input
-          style={styles.input}
-          placeholder="Say something to the league…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <button style={styles.btn} disabled={posting}>
-          {posting ? "Posting…" : "Post"}
-        </button>
-      </form>
-
+    <div style={{ display: "grid", gap: 10 }}>
       {loading ? (
         <div>Loading messages…</div>
       ) : error ? (
-        <div style={styles.error}>Error: {error}</div>
-      ) : messages.length === 0 ? (
-        <div>No messages yet.</div>
+        <div style={{ color: "#b91c1c" }}>Error: {error}</div>
       ) : (
-        <ul style={styles.list}>
-          {messages.map((m) => (
-            <li key={m.id || m.createdAt} style={styles.item}>
-              <div style={styles.msgHeader}>
-                <strong>{m.user?.name || "Someone"}</strong>
-                <span style={styles.time}>
-                  {new Date(m.createdAt || m.timestamp || Date.now()).toLocaleString()}
-                </span>
-              </div>
-              <div>{m.text}</div>
-            </li>
-          ))}
-        </ul>
+        <>
+          {messages.length === 0 ? (
+            <div>No messages yet.</div>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+              {messages.map((m) => (
+                <li
+                  key={m.id}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 10,
+                    padding: 10,
+                    background: "#fff",
+                  }}
+                >
+                  <div style={{ marginBottom: 4 }}>{m.text}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    {m.when ? new Date(m.when).toLocaleString() : ""}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form onSubmit={onSubmit} style={{ display: "flex", gap: 8 }}>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Say something to the league…"
+              style={{
+                flex: 1,
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+                padding: "10px 12px",
+              }}
+            />
+            <button
+              disabled={submitting || !text.trim()}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 8,
+                background: "#111827",
+                color: "#fff",
+                border: "1px solid #111827",
+                cursor: "pointer",
+              }}
+            >
+              {submitting ? "Posting…" : "Post"}
+            </button>
+          </form>
+        </>
       )}
     </div>
   );
 }
-
-const styles = {
-  form: { display: "flex", gap: 8, marginBottom: 12 },
-  input: {
-    flex: 1,
-    padding: "10px 12px",
-    borderRadius: 8,
-    border: "1px solid #d1d5db",
-  },
-  btn: {
-    padding: "10px 14px",
-    borderRadius: 8,
-    border: "1px solid #111827",
-    background: "#111827",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  error: { color: "#b91c1c" },
-  list: { listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 },
-  item: {
-    background: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    borderRadius: 10,
-    padding: 12,
-  },
-  msgHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: 6,
-    color: "#374151",
-    fontSize: 13,
-  },
-  time: { opacity: 0.7 },
-};
