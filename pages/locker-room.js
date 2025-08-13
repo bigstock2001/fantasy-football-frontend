@@ -47,8 +47,6 @@ export default function LockerRoom() {
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
       const msg = e?.message || "Failed to load";
-
-      // Gracefully treat 404s as "no data yet" instead of a scary error
       const is404 = /(^|[\s-])404(?!\d)/.test(String(msg));
       if (is404) {
         switch (key) {
@@ -69,14 +67,12 @@ export default function LockerRoom() {
   }
 
   useEffect(() => {
-    // initial fetches
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     safeLoad("roster", () => apiGet(`/roster?leagueId=${LEAGUE_ID}`));
     safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
     safeLoad("poll", () => apiGet(`/polls/active`));
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
 
-    // live refresh for matchups/standings
     const t = setInterval(() => {
       safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
       safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
@@ -86,7 +82,6 @@ export default function LockerRoom() {
 
   return (
     <div style={styles.page}>
-      {/* Quick links */}
       <div style={styles.quick}>
         <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
           League Home (MFL)
@@ -97,12 +92,10 @@ export default function LockerRoom() {
         <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
       </div>
 
-      {/* Commissioner News (component handles its own fetching/fallbacks) */}
       <Section title="Commissioner News">
         <CommissionerNews />
       </Section>
 
-      {/* Countdown */}
       <Section
         title="Draft Countdown"
         right={
@@ -127,7 +120,6 @@ export default function LockerRoom() {
         )}
       </Section>
 
-      {/* Standings */}
       <Section title="Standings">
         {loading.standings ? (
           <div>Loading standings…</div>
@@ -167,7 +159,6 @@ export default function LockerRoom() {
         )}
       </Section>
 
-      {/* Roster */}
       <Section title="Your Roster">
         {loading.roster ? (
           <div>Loading roster…</div>
@@ -199,7 +190,6 @@ export default function LockerRoom() {
         )}
       </Section>
 
-      {/* Matchups / Live scores */}
       <Section title="This Week’s Matchups (Live)">
         {loading.matchups ? (
           <div>Loading matchups…</div>
@@ -229,12 +219,10 @@ export default function LockerRoom() {
         )}
       </Section>
 
-      {/* Poll */}
       <Section title="League Poll">
         <PollBlock poll={poll} loading={loading.poll} error={errors.poll} />
       </Section>
 
-      {/* Message Board */}
       <Section title="Message Board (Public)">
         <MessageBoard />
       </Section>
@@ -277,7 +265,6 @@ function PollBlock({ poll, loading, error }) {
     setSubmitting(true);
     setMsg("");
     try {
-      // POST to backend (lib/api handles GET; this POST hits the same base)
       const base = process.env.NEXT_PUBLIC_API_BASE || "https://backend.footballforeverdynasty.us";
       const res = await fetch(`${base}/polls/vote`, {
         method: "POST",
@@ -384,7 +371,7 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
   },
   matchCard: {
-    border: "1px solid "#e5e7eb",
+    border: "1px solid #e5e7eb", // <- FIXED
     borderRadius: 12,
     padding: 12,
     background: "#fff",
