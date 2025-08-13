@@ -2,20 +2,22 @@
 const nextConfig = {
   async rewrites() {
     return [
-      { source: "/bff/standings",        destination: "/api/standings" },
-      { source: "/bff/roster",           destination: "/api/roster" },
-      { source: "/bff/matchups",         destination: "/api/matchups" },
-      { source: "/bff/polls/active",     destination: "/api/polls/active" },
-      { source: "/bff/draft/countdown",  destination: "/api/draft/countdown" },
+      // Map /bff calls to your app/api/mfl routes
+      { source: "/bff/standings", destination: "/api/mfl/standings" },
+      { source: "/bff/matchups",  destination: "/api/mfl/matchups" },
+      { source: "/bff/roster",    destination: "/api/mfl/roster" },
 
-      // New: stop WP 404s by serving local JSON
+      // Other local APIs
+      { source: "/bff/polls/active",    destination: "/api/polls/active" },
+      { source: "/bff/draft/countdown", destination: "/api/draft/countdown" },
       { source: "/bff/news/commissioner", destination: "/api/news/commissioner" },
       { source: "/bff/message-board",     destination: "/api/message-board" },
       { source: "/bff/messages",          destination: "/api/message-board" },
 
-      // Fallback (optional): anything else under /bff goes to the old backend
+      // Fallback to the legacy backend — keep LAST
       { source: "/bff/:path*", destination: "https://backend.footballforeverdynasty.us/:path*" },
     ];
   },
 };
+
 module.exports = nextConfig;
