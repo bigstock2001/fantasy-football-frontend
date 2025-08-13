@@ -1,0 +1,10 @@
+import { NextResponse } from "next/server";
+
+// Minimal stub so the UI shows “No matchups found.” instead of 404.
+// You can later call MFL liveScoring or weeklyResults here and map to:
+// [{ id, status, kickoff, home: { name, score }, away: { name, score } }, ...]
+export async function GET() {
+  return NextResponse.json([], {
+    headers: { "cache-control": "s-maxage=15, stale-while-revalidate=120" },
+  });
+}
