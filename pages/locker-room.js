@@ -2,9 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
-import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
+import { apiGet } from "../lib/api";
 
-const LEAGUE_ID = "61408";
+const LEAGUE_ID = process.env.NEXT_PUBLIC_MFL_LEAGUE_ID || "61408";
 
 export default function LockerRoom() {
   const [standings, setStandings] = useState(null);
@@ -16,36 +16,20 @@ export default function LockerRoom() {
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({
-    standings: true,
-    roster: true,
-    matchups: true,
-    banner: true,
-    poll: true,
-    countdown: true,
+    standings: true, roster: true, matchups: true, banner: true, poll: true, countdown: true,
   });
 
   const year = useMemo(() => new Date().getFullYear(), []);
-  const draftRoomUrl = useMemo(
-    () => `https://www63.myfantasyleague.com/${year}/options?L=${LEAGUE_ID}&O=17`,
-    [year]
-  );
-  const leagueHomeUrl = useMemo(
-    () => `https://www63.myfantasyleague.com/${year}/home/${LEAGUE_ID}`,
-    [year]
-  );
 
   async function safeLoad(key, loader) {
     try {
       const data = await loader();
-      switch (key) {
-        case "standings": setStandings(data); break;
-        case "roster": setRoster(data); break;
-        case "matchups": setMatchups(data); break;
-        case "banner": setBanner(data); break;
-        case "poll": setPoll(data); break;
-        case "countdown": setCountdown(data); break;
-        default: break;
-      }
+      if (key === "standings") setStandings(data);
+      else if (key === "roster") setRoster(data);
+      else if (key === "matchups") setMatchups(data);
+      else if (key === "banner") setBanner(data);
+      else if (key === "poll") setPoll(data);
+      else if (key === "countdown") setCountdown(data);
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
       setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
@@ -55,55 +39,35 @@ export default function LockerRoom() {
   }
 
   useEffect(() => {
-    // initial fetches
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     safeLoad("roster", () => apiGet(`/roster?leagueId=${LEAGUE_ID}`));
-
-    // IMPORTANT: treat 404/empty as "no matchups yet"
-    safeLoad("matchups", async () => {
+    // Matchups: treat 404/empty as "no matchups set yet"
+    const loadMatchups = async () => {
       try {
         const d = await apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`);
-        // normalize shapes
         if (Array.isArray(d)) return d;
         if (d && Array.isArray(d.matchups)) return d.matchups;
-        return []; // unknown shape => show empty state
+        return [];
       } catch (err) {
         const msg = String(err?.message || "");
-        if (msg.includes("HTTP 404") || msg.toLowerCase().includes("not found")) {
-          // fall back to empty list (no matchups configured yet)
-          return [];
-        }
-        throw err; // other errors still surface
+        if (msg.includes("HTTP 404") || msg.toLowerCase().includes("not found")) return [];
+        throw err;
       }
-    });
-
+    };
+    safeLoad("matchups", loadMatchups);
     safeLoad("banner", () => apiGet(`/news/commissioner`));
     safeLoad("poll", () => apiGet(`/polls/active`));
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
 
-    // live refresh for matchups/standings
     const t = setInterval(() => {
-      safeLoad("matchups", async () => {
-        try {
-          const d = await apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`);
-          if (Array.isArray(d)) return d;
-          if (d && Array.isArray(d.matchups)) return d.matchups;
-          return [];
-        } catch (err) {
-          const msg = String(err?.message || "");
-          if (msg.includes("HTTP 404") || msg.toLowerCase().includes("not found")) {
-            return [];
-          }
-          throw err;
-        }
-      });
+      safeLoad("matchups", loadMatchups);
       safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     }, 30000);
     return () => clearInterval(t);
-  }, []);
+  }, [year]);
 
   return (
-    <div style={styles.page}>
+    <>
       {/* Commissioner banner */}
       <div style={styles.bannerWrap}>
         {loading.banner ? (
@@ -115,17 +79,6 @@ export default function LockerRoom() {
         ) : (
           <div style={styles.bannerMuted}>No commissioner news right now.</div>
         )}
-      </div>
-
-      {/* Quick links */}
-      <div style={styles.quick}>
-        <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
-          League Home (MFL)
-        </a>
-        <a href={draftRoomUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
-          Draft Room (MFL)
-        </a>
-        <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
       </div>
 
       {/* Countdown */}
@@ -264,7 +217,7 @@ export default function LockerRoom() {
       <Section title="Message Board (Public)">
         <MessageBoard />
       </Section>
-    </div>
+    </>
   );
 }
 
@@ -328,12 +281,7 @@ function PollBlock({ poll, loading, error }) {
       <div style={{ display: "grid", gap: 6 }}>
         {(poll.options || []).map((opt) => (
           <label key={opt} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="radio"
-              name="poll"
-              value={opt}
-              onChange={() => setChoice(opt)}
-            />
+            <input type="radio" name="poll" value={opt} onChange={() => setChoice(opt)} />
             {opt}
           </label>
         ))}
@@ -349,13 +297,6 @@ function PollBlock({ poll, loading, error }) {
 }
 
 const styles = {
-  page: {
-    maxWidth: 1000,
-    margin: "20px auto",
-    padding: "0 16px 40px",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-    color: "#111827",
-  },
   bannerWrap: { marginBottom: 16 },
   banner: {
     background: "#fef3c7",
@@ -374,28 +315,8 @@ const styles = {
   },
   bannerLoading: { opacity: 0.8 },
   bannerError: { color: "#b91c1c" },
-  quick: { display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" },
-  linkBtn: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: "#111827",
-    color: "#fff",
-    textDecoration: "none",
-    border: "1px solid #111827",
-  },
-  linkBtnOutline: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: "#fff",
-    color: "#111827",
-    textDecoration: "none",
-    border: "1px solid #111827",
-  },
   err: { color: "#b91c1c" },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
+  table: { width: "100%", borderCollapse: "collapse" },
   rosterGrid: {
     listStyle: "none",
     padding: 0,
