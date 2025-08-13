@@ -58,14 +58,45 @@ export default function LockerRoom() {
     // initial fetches
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     safeLoad("roster", () => apiGet(`/roster?leagueId=${LEAGUE_ID}`));
-    safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
+
+    // IMPORTANT: treat 404/empty as "no matchups yet"
+    safeLoad("matchups", async () => {
+      try {
+        const d = await apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`);
+        // normalize shapes
+        if (Array.isArray(d)) return d;
+        if (d && Array.isArray(d.matchups)) return d.matchups;
+        return []; // unknown shape => show empty state
+      } catch (err) {
+        const msg = String(err?.message || "");
+        if (msg.includes("HTTP 404") || msg.toLowerCase().includes("not found")) {
+          // fall back to empty list (no matchups configured yet)
+          return [];
+        }
+        throw err; // other errors still surface
+      }
+    });
+
     safeLoad("banner", () => apiGet(`/news/commissioner`));
     safeLoad("poll", () => apiGet(`/polls/active`));
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
 
     // live refresh for matchups/standings
     const t = setInterval(() => {
-      safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
+      safeLoad("matchups", async () => {
+        try {
+          const d = await apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`);
+          if (Array.isArray(d)) return d;
+          if (d && Array.isArray(d.matchups)) return d.matchups;
+          return [];
+        } catch (err) {
+          const msg = String(err?.message || "");
+          if (msg.includes("HTTP 404") || msg.toLowerCase().includes("not found")) {
+            return [];
+          }
+          throw err;
+        }
+      });
       safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     }, 30000);
     return () => clearInterval(t);
@@ -201,7 +232,7 @@ export default function LockerRoom() {
         ) : errors.matchups ? (
           <div style={styles.err}>Error: {errors.matchups}</div>
         ) : !Array.isArray(matchups) || matchups.length === 0 ? (
-          <div>No matchups found.</div>
+          <div>No matchups set yet.</div>
         ) : (
           <div style={styles.matchupsGrid}>
             {matchups.map((m, i) => (
@@ -358,7 +389,7 @@ const styles = {
     background: "#fff",
     color: "#111827",
     textDecoration: "none",
-    border: "1px solid #111827", // <-- fixed quoting
+    border: "1px solid #111827",
   },
   err: { color: "#b91c1c" },
   table: {
