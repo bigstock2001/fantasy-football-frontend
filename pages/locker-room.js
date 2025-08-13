@@ -2,8 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
-import CommissionerNews from "../components/CommissionerNews"; // uses /bff or NEXT_PUBLIC_API_BASE
-import { apiGet } from "../lib/api";
+import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
 
 const LEAGUE_ID = "61408";
 
@@ -11,6 +10,7 @@ export default function LockerRoom() {
   const [standings, setStandings] = useState(null);
   const [roster, setRoster] = useState(null);
   const [matchups, setMatchups] = useState(null);
+  const [banner, setBanner] = useState(null);
   const [poll, setPoll] = useState(null);
   const [countdown, setCountdown] = useState(null);
 
@@ -19,6 +19,7 @@ export default function LockerRoom() {
     standings: true,
     roster: true,
     matchups: true,
+    banner: true,
     poll: true,
     countdown: true,
   });
@@ -40,39 +41,29 @@ export default function LockerRoom() {
         case "standings": setStandings(data); break;
         case "roster": setRoster(data); break;
         case "matchups": setMatchups(data); break;
+        case "banner": setBanner(data); break;
         case "poll": setPoll(data); break;
         case "countdown": setCountdown(data); break;
         default: break;
       }
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
-      const msg = e?.message || "Failed to load";
-      const is404 = /(^|[\s-])404(?!\d)/.test(String(msg));
-      if (is404) {
-        switch (key) {
-          case "standings": setStandings([]); break;
-          case "roster": setRoster({ players: [] }); break;
-          case "matchups": setMatchups([]); break;
-          case "poll": setPoll(null); break;
-          case "countdown": setCountdown(null); break;
-          default: break;
-        }
-        setErrors((prev) => ({ ...prev, [key]: "" }));
-      } else {
-        setErrors((prev) => ({ ...prev, [key]: msg }));
-      }
+      setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
     } finally {
       setLoading((l) => ({ ...l, [key]: false }));
     }
   }
 
   useEffect(() => {
+    // initial fetches
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     safeLoad("roster", () => apiGet(`/roster?leagueId=${LEAGUE_ID}`));
     safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
+    safeLoad("banner", () => apiGet(`/news/commissioner`));
     safeLoad("poll", () => apiGet(`/polls/active`));
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
 
+    // live refresh for matchups/standings
     const t = setInterval(() => {
       safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
       safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
@@ -82,6 +73,19 @@ export default function LockerRoom() {
 
   return (
     <div style={styles.page}>
+      {/* Commissioner banner */}
+      <div style={styles.bannerWrap}>
+        {loading.banner ? (
+          <div style={styles.bannerLoading}>Loading commissioner news…</div>
+        ) : errors.banner ? (
+          <div style={styles.bannerError}>Commissioner news: {errors.banner}</div>
+        ) : banner && banner.message ? (
+          <div style={styles.banner}>{banner.message}</div>
+        ) : (
+          <div style={styles.bannerMuted}>No commissioner news right now.</div>
+        )}
+      </div>
+
       {/* Quick links */}
       <div style={styles.quick}>
         <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
@@ -92,11 +96,6 @@ export default function LockerRoom() {
         </a>
         <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
       </div>
-
-      {/* Commissioner News */}
-      <Section title="Commissioner News">
-        <CommissionerNews />
-      </Section>
 
       {/* Countdown */}
       <Section
@@ -169,12 +168,12 @@ export default function LockerRoom() {
           <div>Loading roster…</div>
         ) : errors.roster ? (
           <div style={styles.err}>Error: {errors.roster}</div>
-        ) : !roster || !Array.isArray(roster.players) || roster.players.length === 0 ? (
+        ) : !roster || !Array.isArray(roster.players) ? (
           <div>No roster yet.</div>
         ) : (
           <ul style={styles.rosterGrid}>
             {roster.players.map((p) => (
-              <li key={p.id || `${p.name}-${p.position}`} style={styles.playerCard}>
+              <li key={p.id} style={styles.playerCard}>
                 <div style={styles.playerTop}>
                   <strong>{p.name}</strong>
                   <span style={styles.pos}>{p.position}</span>
@@ -214,197 +213,4 @@ export default function LockerRoom() {
                 <div style={styles.vs}>@</div>
                 <div style={styles.matchRow}>
                   <span style={styles.teamName}>{m.home?.name || "Home"}</span>
-                  <strong style={styles.score}>{fmtScore(m.home?.score)}</strong>
-                </div>
-                <div style={styles.metaLine}>
-                  {m.status || "Scheduled"} • {m.kickoff ? new Date(m.kickoff).toLocaleString() : ""}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* Poll */}
-      <Section title="League Poll">
-        <PollBlock poll={poll} loading={loading.poll} error={errors.poll} />
-      </Section>
-
-      {/* Message Board */}
-      <Section title="Message Board (Public)">
-        <MessageBoard />
-      </Section>
-    </div>
-  );
-}
-
-function fmtScore(s) {
-  if (s === null || s === undefined) return "-";
-  return Number.isFinite(Number(s)) ? Number(s).toFixed(1) : s;
-}
-
-function CountdownBadge({ date }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const target = new Date(date).getTime();
-  const diff = Math.max(0, target - now);
-  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-  const m = Math.floor((diff / (1000 * 60)) % 60);
-  const s = Math.floor((diff / 1000) % 60);
-  return (
-    <span style={styles.badge}>
-      {d}d {h}h {m}m {s}s
-    </span>
-  );
-}
-
-function PollBlock({ poll, loading, error }) {
-  const [choice, setChoice] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  async function submitVote(e) {
-    e.preventDefault();
-    if (!choice || !poll?.id) return;
-    setSubmitting(true);
-    setMsg("");
-    try {
-      const base = process.env.NEXT_PUBLIC_API_BASE || "https://backend.footballforeverdynasty.us";
-      const res = await fetch(`${base}/polls/vote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pollId: poll.id, option: choice }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      setMsg("Vote submitted!");
-    } catch (e) {
-      setMsg("Failed to submit vote: " + (e?.message || String(e)));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (loading) return <div>Loading poll…</div>;
-  if (error) return <div style={styles.err}>Error: {error}</div>;
-  if (!poll || !poll.question) return <div>No active poll.</div>;
-
-  return (
-    <form onSubmit={submitVote} style={{ display: "grid", gap: 10 }}>
-      <div><strong>{poll.question}</strong></div>
-      <div style={{ display: "grid", gap: 6 }}>
-        {(poll.options || []).map((opt) => (
-          <label key={opt} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="radio"
-              name="poll"
-              value={opt}
-              onChange={() => setChoice(opt)}
-            />
-            {opt}
-          </label>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button style={styles.btnPrimary} disabled={submitting || !choice}>
-          {submitting ? "Submitting…" : "Vote"}
-        </button>
-        {msg && <span>{msg}</span>}
-      </div>
-    </form>
-  );
-}
-
-const styles = {
-  page: {
-    maxWidth: 1000,
-    margin: "20px auto",
-    padding: "0 16px 40px",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-    color: "#111827",
-  },
-  quick: { display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" },
-  linkBtn: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: "#111827",
-    color: "#fff",
-    textDecoration: "none",
-    border: "1px solid #111827",
-  },
-  linkBtnOutline: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    background: "#fff",
-    color: "#111827",
-    textDecoration: "none",
-    border: "1px solid #111827",
-  },
-  err: { color: "#b91c1c" },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  rosterGrid: {
-    listStyle: "none",
-    padding: 0,
-    margin: 0,
-    display: "grid",
-    gap: 10,
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-  },
-  playerCard: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: 12,
-    background: "#fff",
-  },
-  playerTop: { display: "flex", justifyContent: "space-between", marginBottom: 4 },
-  pos: {
-    fontSize: 12,
-    background: "#eef2ff",
-    border: "1px solid #c7d2fe",
-    color: "#3730a3",
-    padding: "2px 6px",
-    borderRadius: 6,
-  },
-  playerMeta: { color: "#6b7280", fontSize: 13, marginBottom: 6 },
-  playerStats: { display: "flex", gap: 10, fontSize: 13 },
-  matchupsGrid: {
-    display: "grid",
-    gap: 10,
-    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-  },
-  matchCard: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: 12,
-    background: "#fff",
-    display: "grid",
-    gap: 6,
-  },
-  matchRow: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  teamName: { fontWeight: 600 },
-  score: { fontSize: 20 },
-  vs: { textAlign: "center", color: "#6b7280" },
-  metaLine: { color: "#6b7280", fontSize: 12, textAlign: "center", marginTop: 4 },
-  badge: {
-    display: "inline-block",
-    padding: "4px 8px",
-    background: "#111827",
-    color: "#fff",
-    borderRadius: 999,
-    fontSize: 12,
-  },
-  btnPrimary: {
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: "1px solid #111827", // <- FIXED
-    background: "#111827",
-    color: "#fff",
-    cursor: "pointer",
-  },
-};
+                  <strong style={styles.score}>{fmtScore(m.h
