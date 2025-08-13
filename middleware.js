@@ -1,39 +1,37 @@
 // middleware.js
 import { NextResponse } from "next/server";
 
-// Pages we won't guard (static, api, login-required)
-const PUBLIC_FILE = /\.(.*)$/;
-
 export function middleware(req) {
-  const { pathname, searchParams } = req.nextUrl;
+  const token = req.cookies.get("ffd_session")?.value;
+  const { pathname, search } = req.nextUrl;
+
+  // Always allow Next internals & API routes
   if (
-    pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
-    PUBLIC_FILE.test(pathname) ||
-    pathname === "/login-required" ||
-    pathname === "/favicon.ico"
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/favicon") ||
+    pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|txt|webp)$/i)
   ) {
     return NextResponse.next();
   }
 
-  // Treat any of these cookies as “logged in”.
-  const hasSession =
-    req.cookies.get("ffd_session") ||
-    req.cookies.get("ffd_token") ||
-    req.cookies.get("token") ||
-    req.cookies.get("session");
+  // Public routes
+  const publicRoutes = ["/login", "/"];
+  const isPublic = publicRoutes.includes(pathname);
 
-  if (!hasSession) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login-required";
-    url.searchParams.set("next", pathname + (searchParams ? `?${searchParams}` : ""));
+  if (!token && !isPublic) {
+    const url = new URL("/login", req.url);
+    url.searchParams.set("next", pathname + (search || ""));
     return NextResponse.redirect(url);
+  }
+
+  if (token && pathname === "/login") {
+    return NextResponse.redirect(new URL("/locker-room", req.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  // Protect everything except /api, /_next/*, static files, and /login-required
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/|favicon.ico).*)"],
 };
