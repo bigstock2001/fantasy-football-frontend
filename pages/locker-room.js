@@ -443,7 +443,7 @@ const styles = {
     background: "#111827",
     color: "#fff",
     textDecoration: "none",
-    border: "1px solid "#111827",
+    border: "1px solid #111827",
   },
   linkBtnOutline: {
     padding: "8px 12px",
@@ -451,7 +451,7 @@ const styles = {
     background: "#fff",
     color: "#111827",
     textDecoration: "none",
-    border: "1px solid "#111827",
+    border: "1px solid #111827",
   },
   err: { color: "#b91c1c" },
   table: {
@@ -512,7 +512,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid "#111827",
+    border: "1px solid #111827",
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
