@@ -2,36 +2,34 @@
 import { NextResponse } from "next/server";
 
 export function middleware(req) {
-  const token = req.cookies.get("ffd_session")?.value;
   const { pathname, search } = req.nextUrl;
-
-  // Always allow Next internals & API routes
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/favicon") ||
-    pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|txt|webp)$/i)
-  ) {
+  // Public paths that never require auth:
+  const publicPrefixes = [
+    "/login",
+    "/api/login",
+    "/api/logout",
+    "/_next",
+    "/favicon.ico",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/public",
+  ];
+  if (publicPrefixes.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
-  // Public routes
-  const publicRoutes = ["/login", "/"];
-  const isPublic = publicRoutes.includes(pathname);
-
-  if (!token && !isPublic) {
-    const url = new URL("/login", req.url);
+  const isAuthed = req.cookies.get("ffd_auth")?.value;
+  if (!isAuthed) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
     url.searchParams.set("next", pathname + (search || ""));
     return NextResponse.redirect(url);
-  }
-
-  if (token && pathname === "/login") {
-    return NextResponse.redirect(new URL("/locker-room", req.url));
   }
 
   return NextResponse.next();
 }
 
+// Protect everything except the public assets & login endpoints above.
 export const config = {
-  matcher: ["/((?!_next/|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|api/login|api/logout|login).*)"],
 };
