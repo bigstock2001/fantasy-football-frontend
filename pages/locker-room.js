@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
+import CommissionerNews from "../components/CommissionerNews"; // NEW
 import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
 
 const LEAGUE_ID = "61408";
@@ -10,7 +11,6 @@ export default function LockerRoom() {
   const [standings, setStandings] = useState(null);
   const [roster, setRoster] = useState(null);
   const [matchups, setMatchups] = useState(null);
-  const [banner, setBanner] = useState(null);
   const [poll, setPoll] = useState(null);
   const [countdown, setCountdown] = useState(null);
 
@@ -19,7 +19,6 @@ export default function LockerRoom() {
     standings: true,
     roster: true,
     matchups: true,
-    banner: true,
     poll: true,
     countdown: true,
   });
@@ -41,14 +40,29 @@ export default function LockerRoom() {
         case "standings": setStandings(data); break;
         case "roster": setRoster(data); break;
         case "matchups": setMatchups(data); break;
-        case "banner": setBanner(data); break;
         case "poll": setPoll(data); break;
         case "countdown": setCountdown(data); break;
         default: break;
       }
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
-      setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
+      const msg = e?.message || "Failed to load";
+
+      // Gracefully treat 404s as "no data yet" instead of a scary error
+      const is404 = /(^|[\s-])404(?!\d)/.test(String(msg));
+      if (is404) {
+        switch (key) {
+          case "standings": setStandings([]); break;
+          case "roster": setRoster({ players: [] }); break;
+          case "matchups": setMatchups([]); break;
+          case "poll": setPoll(null); break;
+          case "countdown": setCountdown(null); break;
+          default: break;
+        }
+        setErrors((prev) => ({ ...prev, [key]: "" }));
+      } else {
+        setErrors((prev) => ({ ...prev, [key]: msg }));
+      }
     } finally {
       setLoading((l) => ({ ...l, [key]: false }));
     }
@@ -59,7 +73,6 @@ export default function LockerRoom() {
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     safeLoad("roster", () => apiGet(`/roster?leagueId=${LEAGUE_ID}`));
     safeLoad("matchups", () => apiGet(`/matchups?leagueId=${LEAGUE_ID}&live=1`));
-    safeLoad("banner", () => apiGet(`/news/commissioner`));
     safeLoad("poll", () => apiGet(`/polls/active`));
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
 
@@ -73,19 +86,6 @@ export default function LockerRoom() {
 
   return (
     <div style={styles.page}>
-      {/* Commissioner banner */}
-      <div style={styles.bannerWrap}>
-        {loading.banner ? (
-          <div style={styles.bannerLoading}>Loading commissioner news…</div>
-        ) : errors.banner ? (
-          <div style={styles.bannerError}>Commissioner news: {errors.banner}</div>
-        ) : banner && banner.message ? (
-          <div style={styles.banner}>{banner.message}</div>
-        ) : (
-          <div style={styles.bannerMuted}>No commissioner news right now.</div>
-        )}
-      </div>
-
       {/* Quick links */}
       <div style={styles.quick}>
         <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
@@ -96,6 +96,11 @@ export default function LockerRoom() {
         </a>
         <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
       </div>
+
+      {/* Commissioner News (component handles its own fetching/fallbacks) */}
+      <Section title="Commissioner News">
+        <CommissionerNews />
+      </Section>
 
       {/* Countdown */}
       <Section
@@ -168,12 +173,12 @@ export default function LockerRoom() {
           <div>Loading roster…</div>
         ) : errors.roster ? (
           <div style={styles.err}>Error: {errors.roster}</div>
-        ) : !roster || !Array.isArray(roster.players) ? (
+        ) : !roster || !Array.isArray(roster.players) || roster.players.length === 0 ? (
           <div>No roster yet.</div>
         ) : (
           <ul style={styles.rosterGrid}>
             {roster.players.map((p) => (
-              <li key={p.id} style={styles.playerCard}>
+              <li key={p.id || `${p.name}-${p.position}`} style={styles.playerCard}>
                 <div style={styles.playerTop}>
                   <strong>{p.name}</strong>
                   <span style={styles.pos}>{p.position}</span>
@@ -326,24 +331,6 @@ const styles = {
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
     color: "#111827",
   },
-  bannerWrap: { marginBottom: 16 },
-  banner: {
-    background: "#fef3c7",
-    border: "1px solid #f59e0b",
-    color: "#92400e",
-    padding: "10px 12px",
-    borderRadius: 10,
-    fontWeight: 600,
-  },
-  bannerMuted: {
-    background: "#f3f4f6",
-    border: "1px solid #e5e7eb",
-    padding: "10px 12px",
-    borderRadius: 10,
-    color: "#374151",
-  },
-  bannerLoading: { opacity: 0.8 },
-  bannerError: { color: "#b91c1c" },
   quick: { display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" },
   linkBtn: {
     padding: "8px 12px",
@@ -397,7 +384,7 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
   },
   matchCard: {
-    border: "1px solid #e5e7eb",
+    border: "1px solid "#e5e7eb",
     borderRadius: 12,
     padding: 12,
     background: "#fff",
@@ -420,7 +407,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid #111827",
+    border: "1px solid "#111827",
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
