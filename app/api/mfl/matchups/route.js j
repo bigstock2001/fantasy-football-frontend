@@ -1,36 +1,80 @@
+// app/api/mfl/matchups/route.js
 import { NextResponse } from "next/server";
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const leagueId = searchParams.get("leagueId") || process.env.MFL_LEAGUE_ID || "61408";
-  const base = process.env.MFL_BASE || "https://api.myfantasyleague.com";
-  const year = process.env.MFL_YEAR || "2025";
-  const week = searchParams.get("week") || "WW"; // WW = current week in MFL
+
+  const base   = process.env.MFL_BASE      || "https://api.myfantasyleague.com";
+  const year   = process.env.MFL_YEAR      || "2025";
+  const league = searchParams.get("leagueId") || process.env.MFL_LEAGUE_ID || "61408";
+  const week   = searchParams.get("week") || "CURRENT";
+  const live   = searchParams.get("live"); // "1" from your UI
+
+  // Helper to normalize a franchise entry (may be object or array)
+  const get = (obj, i) => Array.isArray(obj) ? obj[i] : obj?.[i];
 
   try {
-    const url = `${base}/${year}/export?TYPE=liveScoring&L=${leagueId}&W=${week}&JSON=1`;
-    const r = await fetch(url, { next: { revalidate: 15 } });
-    const data = await r.json().catch(() => null);
+    // Try live scoring first if requested
+    if (live) {
+      const liveUrl = new URL(`${base}/${year}/export`);
+      liveUrl.searchParams.set("TYPE", "liveScoring");
+      liveUrl.searchParams.set("L", league);
+      liveUrl.searchParams.set("W", week);
+      liveUrl.searchParams.set("JSON", "1");
 
-    const games = data?.liveScoring?.matchup || data?.liveScoring?.matchups?.matchup || [];
-    const matchups = Array.isArray(games)
-      ? games.map((g) => ({
-          id: g.id || g.matchup_id,
-          away: {
-            name: g.teamA?.name || g.franchise?.[0]?.name || "Away",
-            score: Number(g.teamA?.score ?? g.franchise?.[0]?.score ?? 0),
-          },
-          home: {
-            name: g.teamB?.name || g.franchise?.[1]?.name || "Home",
-            score: Number(g.teamB?.score ?? g.franchise?.[1]?.score ?? 0),
-          },
-          status: g.status || data?.liveScoring?.status || "Scheduled",
-          kickoff: g.kickoff,
-        }))
-      : [];
+      const r = await fetch(liveUrl.toString(), { next: { revalidate: 15 } });
+      if (r.ok) {
+        const data = await r.json().catch(() => ({}));
+        const mu = data?.liveScoring?.matchup;
+        const list = Array.isArray(mu) ? mu : mu ? [mu] : [];
+        const out = list.map((m, idx) => {
+          const a = get(m.franchise, 0) || {};
+          const h = get(m.franchise, 1) || {};
+          const seconds = Number(m.gameSecondsRemaining ?? NaN);
+          return {
+            id: String(m.id ?? idx),
+            away: { name: a.name, score: a.score != null ? Number(a.score) : null },
+            home: { name: h.name, score: h.score != null ? Number(h.score) : null },
+            status: Number.isFinite(seconds) ? (seconds === 0 ? "Final" : "In Progress") : "In Progress",
+          };
+        });
+        return NextResponse.json(out, {
+          headers: { "cache-control": "s-maxage=15, stale-while-revalidate=60" },
+        });
+      }
+    }
 
-    return NextResponse.json(matchups);
+    // Fallback to schedule (shows names, no scores)
+    const schUrl = new URL(`${base}/${year}/export`);
+    schUrl.searchParams.set("TYPE", "schedule");
+    schUrl.searchParams.set("L", league);
+    schUrl.searchParams.set("W", week);
+    schUrl.searchParams.set("JSON", "1");
+
+    const rs = await fetch(schUrl.toString(), { next: { revalidate: 60 } });
+    if (rs.ok) {
+      const data = await rs.json().catch(() => ({}));
+      const wk = data?.schedule?.week;
+      const list = Array.isArray(wk?.matchup) ? wk.matchup : wk?.matchup ? [wk.matchup] : [];
+      const out = list.map((m, idx) => {
+        const a = get(m.franchise, 0) || {};
+        const h = get(m.franchise, 1) || {};
+        return {
+          id: String(m.id ?? idx),
+          away: { name: a.name, score: null },
+          home: { name: h.name, score: null },
+          status: "Scheduled",
+          kickoff: m.kickoffTime,
+        };
+      });
+      return NextResponse.json(out, {
+        headers: { "cache-control": "s-maxage=60, stale-while-revalidate=300" },
+      });
+    }
   } catch {
-    return NextResponse.json([]); // safe empty list
+    // ignore
   }
+
+  // Never 404 to the UI
+  return NextResponse.json([]);
 }
