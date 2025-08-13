@@ -358,7 +358,7 @@ const styles = {
     background: "#fff",
     color: "#111827",
     textDecoration: "none",
-    border: "1px solid "#111827",
+    border: "1px solid #111827", // <-- fixed quoting
   },
   err: { color: "#b91c1c" },
   table: {
