@@ -1,34 +1,47 @@
 // middleware.js
 import { NextResponse } from "next/server";
 
+const PUBLIC_PATHS = [
+  "/login",
+  "/login-required",
+  "/api/login",
+  "/api/logout",
+  "/favicon.ico",
+];
+
 export function middleware(req) {
   const { pathname, search } = req.nextUrl;
+  const isApi = pathname.startsWith("/api/");
+  const isNext = pathname.startsWith("/_next/") || pathname.startsWith("/static/");
+  const isPublic = PUBLIC_PATHS.includes(pathname) || isApi || isNext;
 
-  // Always allow: login pages, API routes, Next assets, and static files
-  const isPublic =
-    pathname === "/login" ||
-    pathname === "/login-required" ||
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico" ||
-    pathname.startsWith("/images") ||
-    /\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$/.test(pathname);
+  // Auth cookie set by /api/login
+  const hasAuth = req.cookies.get("ffd_auth")?.value === "1";
 
-  if (isPublic) return NextResponse.next();
+  // If you’re at the root:
+  //  - send logged-in users to Locker Room
+  //  - let logged-out users see the root (or change to redirect to /login if you prefer)
+  if (pathname === "/") {
+    if (hasAuth) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/locker-room";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
 
-  // Require auth cookie for everything else
-  const authed = req.cookies.get("ffd_auth")?.value;
-  if (!authed) {
+  // Block protected pages if not logged in
+  if (!isPublic && !hasAuth) {
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    if (pathname && pathname !== "/") url.searchParams.set("from", pathname + search);
+    url.pathname = "/login-required";
+    url.search = search ? `${search}&from=${encodeURIComponent(pathname)}` : `?from=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
 
   return NextResponse.next();
 }
 
-// Match "everything", but we'll early-return for public paths above
+// Apply to everything so we can catch root, then exclude assets inside code above.
 export const config = {
-  matcher: ["/:path*"],
+  matcher: "/:path*",
 };
