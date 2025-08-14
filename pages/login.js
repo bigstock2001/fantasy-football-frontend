@@ -1,71 +1,74 @@
 // pages/login.js
-import React, { useState } from "react";
-import { useRouter } from "next/router";
+import { useState } from "react";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const nextUrl = (router.query.next && String(router.query.next)) || "/locker-room";
-
   const [password, setPassword] = useState("");
-  const [franchiseId, setFranchiseId] = useState("");
-  const [error, setError] = useState("");
+  const [teamId, setTeamId] = useState(""); // optional: preselect your franchise
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const from =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("from") || "/locker-room"
+      : "/locker-room";
 
   async function onSubmit(e) {
     e.preventDefault();
-    setError("");
+    setBusy(true);
+    setMsg("");
     try {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          password: password || undefined,
-          franchiseId: franchiseId || undefined,
-        }),
+        body: JSON.stringify({ password, franchiseId: teamId || undefined }),
       });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${res.status}`);
-      }
-      router.replace(nextUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // go to the page we came from, or locker-room
+      window.location.replace(from);
     } catch (err) {
-      setError(err.message || "Login failed");
+      setMsg("Login failed. Check password and try again.");
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <div style={styles.wrap}>
-      <form onSubmit={onSubmit} style={styles.card}>
+      <div style={styles.card}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Sign in</h1>
-        <p style={{ margin: "8px 0 16px", color: "#6b7280" }}>
-          Enter the league password (if required) and optionally choose your franchise.
-        </p>
+        <p style={{ color: "#6b7280", marginTop: 6 }}>You must be logged in to continue.</p>
 
-        <label style={styles.label}>
-          <span>Password (if required)</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={styles.input}
-            placeholder="••••••••"
-          />
-        </label>
+        <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 14 }}>
+          <label style={styles.label}>
+            <span>Password (if required)</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.input}
+              placeholder="••••••••"
+            />
+          </label>
 
-        <label style={styles.label}>
-          <span>Franchise ID (optional)</span>
-          <input
-            type="text"
-            value={franchiseId}
-            onChange={(e) => setFranchiseId(e.target.value)}
-            style={styles.input}
-            placeholder="e.g. 0001"
-          />
-        </label>
+          <label style={styles.label}>
+            <span>Franchise ID (optional)</span>
+            <input
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+              style={styles.input}
+              placeholder="e.g. 0007"
+            />
+            <small style={{ color: "#6b7280" }}>
+              You can also pick your team later inside the Locker Room.
+            </small>
+          </label>
 
-        {error && <div style={styles.error}>{error}</div>}
-
-        <button style={styles.button}>Sign in</button>
-      </form>
+          <button disabled={busy} style={styles.btn}>
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+          {msg && <div style={{ color: "#b91c1c" }}>{msg}</div>}
+        </form>
+      </div>
     </div>
   );
 }
@@ -75,44 +78,31 @@ const styles = {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
-    background: "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
+    background:
+      "linear-gradient(180deg, #0ea5e9 0%, #7c3aed 50%, #111827 100%)",
   },
   card: {
-    width: "100%",
-    maxWidth: 420,
-    background: "#fff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: 16,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-    display: "grid",
-    gap: 12,
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-    color: "#111827",
+    width: "min(92vw, 420px)",
+    background: "white",
+    borderRadius: 14,
+    padding: 18,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
   },
-  label: { display: "grid", gap: 6, fontSize: 14 },
+  label: { display: "grid", gap: 6, fontWeight: 600 },
   input: {
-    border: "1px solid #e5e7eb",
-    borderRadius: 8,
     padding: "10px 12px",
-    fontSize: 14,
+    borderRadius: 8,
+    border: "1px solid #e5e7eb",
+    fontSize: 15,
   },
-  button: {
-    marginTop: 8,
+  btn: {
+    marginTop: 6,
+    padding: "10px 12px",
+    borderRadius: 10,
     border: "1px solid #111827",
     background: "#111827",
-    color: "#fff",
-    borderRadius: 8,
-    padding: "10px 12px",
+    color: "white",
     cursor: "pointer",
-    fontSize: 14,
-  },
-  error: {
-    color: "#b91c1c",
-    background: "#fee2e2",
-    border: "1px solid #fecaca",
-    padding: "8px 10px",
-    borderRadius: 8,
-    fontSize: 14,
+    fontWeight: 700,
   },
 };
