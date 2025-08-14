@@ -2,9 +2,8 @@
 import { useState } from "react";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [appPassword, setAppPassword] = useState("");
-  const [teamId, setTeamId] = useState("");
+  const [wpUser, setWpUser] = useState("");
+  const [wpAppPassword, setWpAppPassword] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -18,19 +17,15 @@ export default function LoginPage() {
     setBusy(true);
     setMsg("");
     try {
-      const res = await fetch("/api/wp-login", {
+      const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          appPassword,
-          franchiseId: teamId || undefined,
-        }),
+        body: JSON.stringify({ wpUser, wpAppPassword }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       window.location.replace(from);
-    } catch (err) {
-      setMsg("Login failed. Check your username and Application Password.");
+    } catch {
+      setMsg("Login failed. Check your WP username and Application Password.");
     } finally {
       setBusy(false);
     }
@@ -41,19 +36,19 @@ export default function LoginPage() {
       <div style={styles.card}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Sign in</h1>
         <p style={{ color: "#6b7280", marginTop: 6 }}>
-          Use your WordPress <strong>username</strong> and an{" "}
-          <strong>Application Password</strong>.
+          Use your WordPress username and Application Password.
         </p>
 
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 14 }}>
           <label style={styles.label}>
-            <span>Username</span>
+            <span>WordPress Username</span>
             <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={wpUser}
+              onChange={(e) => setWpUser(e.target.value)}
               style={styles.input}
               placeholder="your-wp-username"
               autoComplete="username"
+              required
             />
           </label>
 
@@ -61,25 +56,16 @@ export default function LoginPage() {
             <span>Application Password</span>
             <input
               type="password"
-              value={appPassword}
-              onChange={(e) => setAppPassword(e.target.value)}
+              value={wpAppPassword}
+              onChange={(e) => setWpAppPassword(e.target.value)}
               style={styles.input}
-              placeholder="paste your application password"
+              placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
               autoComplete="current-password"
+              required
             />
             <small style={{ color: "#6b7280" }}>
-              In WP Admin: <em>Users → Your Profile → Application Passwords</em>.
+              Create one in WP → Users → Your Profile → Application Passwords.
             </small>
-          </label>
-
-          <label style={styles.label}>
-            <span>Franchise ID (optional)</span>
-            <input
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              style={styles.input}
-              placeholder="e.g. 0007"
-            />
           </label>
 
           <button disabled={busy} style={styles.btn}>
