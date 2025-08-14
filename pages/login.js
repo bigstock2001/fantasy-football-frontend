@@ -14,19 +14,28 @@ export default function LoginPage() {
 
   async function onSubmit(e) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setMsg("");
+
     try {
       const res = await fetch("/api/login", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, franchiseId: teamId || undefined }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // go to the page we came from, or locker-room
+
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("Bad password.");
+        if (res.status === 405) throw new Error("POST required — did the browser send a GET?");
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      // success → go where we came from (or locker-room)
       window.location.replace(from);
     } catch (err) {
-      setMsg("Login failed. Check password and try again.");
+      setMsg(err.message || "Login failed. Check password and try again.");
     } finally {
       setBusy(false);
     }
@@ -47,6 +56,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               style={styles.input}
               placeholder="••••••••"
+              autoComplete="current-password"
             />
           </label>
 
@@ -57,6 +67,7 @@ export default function LoginPage() {
               onChange={(e) => setTeamId(e.target.value)}
               style={styles.input}
               placeholder="e.g. 0007"
+              autoComplete="off"
             />
             <small style={{ color: "#6b7280" }}>
               You can also pick your team later inside the Locker Room.
@@ -78,8 +89,7 @@ const styles = {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
-    background:
-      "linear-gradient(180deg, #0ea5e9 0%, #7c3aed 50%, #111827 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7c3aed 50%, #111827 100%)",
   },
   card: {
     width: "min(92vw, 420px)",
