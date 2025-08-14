@@ -51,5 +51,5 @@ const btnGhost = {
   background: "#fff",
   color: "#111827",
   textDecoration: "none",
-  border: "1px solid "#111827",
+  border: "1px solid #111827",
 };
