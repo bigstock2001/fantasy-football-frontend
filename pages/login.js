@@ -2,8 +2,9 @@
 import { useState } from "react";
 
 export default function LoginPage() {
-  const [password, setPassword] = useState("");
-  const [teamId, setTeamId] = useState(""); // optional: preselect your franchise
+  const [username, setUsername] = useState("");
+  const [appPassword, setAppPassword] = useState("");
+  const [teamId, setTeamId] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -14,28 +15,22 @@ export default function LoginPage() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    if (busy) return;
     setBusy(true);
     setMsg("");
-
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch("/api/wp-login", {
         method: "POST",
-        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, franchiseId: teamId || undefined }),
+        body: JSON.stringify({
+          username,
+          appPassword,
+          franchiseId: teamId || undefined,
+        }),
       });
-
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Bad password.");
-        if (res.status === 405) throw new Error("POST required — did the browser send a GET?");
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      // success → go where we came from (or locker-room)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       window.location.replace(from);
     } catch (err) {
-      setMsg(err.message || "Login failed. Check password and try again.");
+      setMsg("Login failed. Check your username and Application Password.");
     } finally {
       setBusy(false);
     }
@@ -45,19 +40,36 @@ export default function LoginPage() {
     <div style={styles.wrap}>
       <div style={styles.card}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Sign in</h1>
-        <p style={{ color: "#6b7280", marginTop: 6 }}>You must be logged in to continue.</p>
+        <p style={{ color: "#6b7280", marginTop: 6 }}>
+          Use your WordPress <strong>username</strong> and an{" "}
+          <strong>Application Password</strong>.
+        </p>
 
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 14 }}>
           <label style={styles.label}>
-            <span>Password (if required)</span>
+            <span>Username</span>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              style={styles.input}
+              placeholder="your-wp-username"
+              autoComplete="username"
+            />
+          </label>
+
+          <label style={styles.label}>
+            <span>Application Password</span>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={appPassword}
+              onChange={(e) => setAppPassword(e.target.value)}
               style={styles.input}
-              placeholder="••••••••"
+              placeholder="paste your application password"
               autoComplete="current-password"
             />
+            <small style={{ color: "#6b7280" }}>
+              In WP Admin: <em>Users → Your Profile → Application Passwords</em>.
+            </small>
           </label>
 
           <label style={styles.label}>
@@ -67,11 +79,7 @@ export default function LoginPage() {
               onChange={(e) => setTeamId(e.target.value)}
               style={styles.input}
               placeholder="e.g. 0007"
-              autoComplete="off"
             />
-            <small style={{ color: "#6b7280" }}>
-              You can also pick your team later inside the Locker Room.
-            </small>
           </label>
 
           <button disabled={busy} style={styles.btn}>
