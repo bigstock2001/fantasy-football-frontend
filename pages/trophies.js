@@ -1,7 +1,6 @@
 // pages/trophies.js
 import React, { useEffect, useState } from "react";
 import Section from "../components/Section";
-import { apiGet } from "../lib/api";
 
 export default function TrophiesPage() {
   const [data, setData] = useState(null);
@@ -11,7 +10,21 @@ export default function TrophiesPage() {
   useEffect(() => {
     (async () => {
       try {
-        const json = await apiGet(`/trophies`);
+        // Call local app route directly
+        const res = await fetch("/api/trophies", { cache: "no-store" });
+        const ctype = res.headers.get("content-type") || "";
+
+        if (!res.ok) {
+          // Try to read text to show a useful message
+          const text = await res.text().catch(() => "");
+          throw new Error(`HTTP ${res.status}${text ? " – " + text.slice(0, 80) : ""}`);
+        }
+        if (!ctype.includes("application/json")) {
+          const text = await res.text().catch(() => "");
+          throw new Error(`Unexpected content-type (${ctype})${text ? " – " + text.slice(0, 80) : ""}`);
+        }
+
+        const json = await res.json();
         setData(json || {});
         setErr("");
       } catch (e) {
@@ -51,7 +64,11 @@ export default function TrophiesPage() {
       </Section>
 
       <Section title="League Records">
-        {records.length === 0 ? (
+        {loading ? (
+          <div>Loading…</div>
+        ) : err ? (
+          <div style={styles.err}>Error: {err}</div>
+        ) : records.length === 0 ? (
           <div>No records have been recorded yet.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -82,7 +99,11 @@ export default function TrophiesPage() {
       </Section>
 
       <Section title="Awards">
-        {awards.length === 0 ? (
+        {loading ? (
+          <div>Loading…</div>
+        ) : err ? (
+          <div style={styles.err}>Error: {err}</div>
+        ) : awards.length === 0 ? (
           <div>No awards yet.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -122,7 +143,7 @@ const styles = {
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
     color: "#111827",
   },
-  err: { color: "#b91c1c" },
+  err: { color: "#b91c1c", whiteSpace: "pre-wrap" },
   grid: {
     display: "grid",
     gap: 12,
