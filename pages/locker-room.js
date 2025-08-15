@@ -47,10 +47,7 @@ export default function LockerRoom() {
 
   // boot franchise id from cookie
   useEffect(() => {
-    const fid =
-      readCookie("ffd_franchise") ||
-      readCookie("franchiseId") ||
-      null;
+    const fid = readCookie("ffd_franchise") || readCookie("franchiseId") || null;
     setFranchiseId(fid);
   }, []);
 
@@ -79,7 +76,14 @@ export default function LockerRoom() {
       }
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
-      setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
+      const msg = String(e?.message || "");
+      // Normalize 404 on matchups to "no matchups yet"
+      if (key === "matchups" && /404/.test(msg)) {
+        setMatchups([]); // treat 404 as empties
+        setErrors((prev) => ({ ...prev, [key]: "" }));
+      } else {
+        setErrors((prev) => ({ ...prev, [key]: msg || "Failed to load" }));
+      }
     } finally {
       setLoading((l) => ({ ...l, [key]: false }));
     }
@@ -98,7 +102,6 @@ export default function LockerRoom() {
     if (franchiseId) return;
     setLoading((l) => ({ ...l, leagueMeta: true }));
     (async () => {
-      // Hit your MFL pass-through route to get league metadata (franchises list)
       const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}`, { cache: "no-store" });
       if (!res.ok) {
         setErrors((e) => ({ ...e, leagueMeta: `HTTP ${res.status}` }));
@@ -297,7 +300,11 @@ export default function LockerRoom() {
         ) : loading.matchups ? (
           <div>Loading matchups…</div>
         ) : errors.matchups ? (
-          <div style={styles.err}>Error: {errors.matchups}</div>
+          /404/.test(String(errors.matchups)) ? (
+            <div>No matchups set yet.</div>
+          ) : (
+            <div style={styles.err}>Error: {errors.matchups}</div>
+          )
         ) : !Array.isArray(myMatchups) || myMatchups.length === 0 ? (
           <div>No matchups set yet.</div>
         ) : (
