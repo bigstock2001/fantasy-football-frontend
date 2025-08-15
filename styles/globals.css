@@ -1,0 +1,10 @@
+/* styles/globals.css */
+html, body, #__next { height: 100%; }
+body { margin: 0; }
+* { box-sizing: border-box; }
+
+/* If using Tailwind, uncomment:
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+*/

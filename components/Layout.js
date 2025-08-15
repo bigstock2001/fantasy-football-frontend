@@ -1,87 +1,67 @@
 // components/Layout.js
-import React, { useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from "next/router";
+import React from "react";
+
+const LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/locker-room", label: "Locker Room" },
+  { href: "/stats", label: "Standings" },
+  { href: "/trophies", label: "Trophies" },
+];
 
 export default function Layout({ children }) {
-  const leagueId = process.env.NEXT_PUBLIC_MFL_LEAGUE_ID || "61408";
-  const year = useMemo(() => new Date().getFullYear(), []);
-  const leagueHomeUrl = `https://www63.myfantasyleague.com/${year}/home/${leagueId}`;
-  const draftRoomUrl = `https://www63.myfantasyleague.com/${year}/options?L=${leagueId}&O=17`;
+  const router = useRouter();
 
   return (
-    <div style={styles.app}>
-      {/* Fixed page background (stays put while content scrolls) */}
-      <div aria-hidden="true" style={styles.fixedBg} />
+    <div className="relative min-h-screen text-white">
+      {/* Fixed gradient background */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950" />
+        <div
+          className="absolute inset-x-0 top-0 h-40 opacity-30 blur-2xl"
+          style={{
+            background:
+              "radial-gradient(60% 60% at 50% 0%, rgba(99,102,241,0.5), rgba(99,102,241,0) 70%)",
+          }}
+        />
+      </div>
 
-      {/* Sticky gradient navbar */}
-      <header style={styles.navbar}>
-        <div style={styles.navInner}>
-          <a href="/" style={styles.brand}>FootballForever</a>
-          <nav style={styles.navLinks}>
-            <a href="/locker-room" style={styles.navBtn}>Locker Room</a>
-            <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.navBtn}>
-              League Home (MFL)
-            </a>
-            <a href={draftRoomUrl} target="_blank" rel="noreferrer" style={styles.navBtn}>
-              Draft Room (MFL)
-            </a>
-            <a href="/api/logout" style={{ ...styles.navBtn, ...styles.navBtnOutline }}>
+      {/* Sticky top nav */}
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-900/60 backdrop-blur">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+          <Link href="/" className="font-semibold tracking-wide">
+            Barracks Fantasy
+          </Link>
+          <div className="flex items-center gap-2">
+            {LINKS.map((l) => {
+              const active = router.pathname === l.href;
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium border ${
+                    active
+                      ? "bg-white/10 border-white/20"
+                      : "bg-white/5 hover:bg-white/10 border-white/10"
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
+            <a
+              href="/api/logout"
+              className="rounded-lg px-3 py-2 text-sm font-medium bg-rose-500/90 hover:bg-rose-500 border border-rose-400/30"
+            >
               Logout
             </a>
-          </nav>
-        </div>
+          </div>
+        </nav>
       </header>
 
-      {/* Main content container */}
-      <main style={styles.page}>{children}</main>
+      {/* Page content */}
+      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
     </div>
   );
 }
-
-const styles = {
-  app: { position: "relative", minHeight: "100vh" },
-  fixedBg: {
-    position: "fixed",
-    inset: 0,
-    zIndex: -1,
-    background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 40%, #ffffff 100%)",
-  },
-  navbar: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    background: "linear-gradient(90deg, #4f46e5, #9333ea)",
-    color: "#fff",
-    borderBottom: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
-  },
-  navInner: {
-    maxWidth: 1100,
-    margin: "0 auto",
-    padding: "12px 16px",
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-  },
-  brand: { fontWeight: 800, letterSpacing: 0.3, fontSize: 18, color: "#fff", textDecoration: "none" },
-  navLinks: { display: "flex", gap: 8, flexWrap: "wrap" },
-  navBtn: {
-    display: "inline-block",
-    padding: "8px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.35)",
-    textDecoration: "none",
-    color: "#fff",
-    background: "rgba(255,255,255,0.10)",
-    whiteSpace: "nowrap",
-  },
-  navBtnOutline: { background: "transparent" },
-  page: {
-    maxWidth: 1000,
-    margin: "18px auto 40px",
-    padding: "0 16px 40px",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-    color: "#111827",
-  },
-};
