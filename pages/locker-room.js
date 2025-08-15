@@ -2,14 +2,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
-import { apiGet } from "../lib/api";
+import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
 
 const LEAGUE_ID = "61408";
-const MFL_YEAR = Number(process.env.NEXT_PUBLIC_MFL_YEAR || "2025");
-const MFL_FALLBACK_BASE =
-  process.env.NEXT_PUBLIC_MFL_BASE || "https://www45.myfantasyleague.com";
 
-// --- helpers ---------------------------------------------------------
+/* ------------------- helpers ------------------- */
 function readCookie(name) {
   if (typeof document === "undefined") return null;
   const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -25,7 +22,7 @@ function fmtScore(s) {
   return Number.isFinite(Number(s)) ? Number(s).toFixed(1) : s;
 }
 
-// --- page ------------------------------------------------------------
+/* -------------------- page --------------------- */
 export default function LockerRoom() {
   const [standings, setStandings] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -34,7 +31,7 @@ export default function LockerRoom() {
   const [poll, setPoll] = useState(null);
   const [countdown, setCountdown] = useState(null);
 
-  const [leagueMeta, setLeagueMeta] = useState(null); // franchises + baseURL
+  const [leagueMeta, setLeagueMeta] = useState(null); // franchises (for selector)
   const [franchiseId, setFranchiseId] = useState(null);
 
   const [errors, setErrors] = useState({});
@@ -48,26 +45,21 @@ export default function LockerRoom() {
     leagueMeta: false,
   });
 
-  // Compute the MFL base host we should use for links
-  const mflBase = useMemo(
-    () => leagueMeta?.league?.baseURL || MFL_FALLBACK_BASE,
-    [leagueMeta]
-  );
-
-  const draftRoomUrl = useMemo(
-    () => `${mflBase}/${MFL_YEAR}/options?L=${LEAGUE_ID}&O=17`,
-    [mflBase]
-  );
-  const leagueHomeUrl = useMemo(
-    () => `${mflBase}/${MFL_YEAR}/home/${LEAGUE_ID}`,
-    [mflBase]
-  );
-
   // boot franchise id from cookie
   useEffect(() => {
     const fid = readCookie("ffd_franchise") || readCookie("franchiseId") || null;
     setFranchiseId(fid);
   }, []);
+
+  const year = useMemo(() => new Date().getFullYear(), []);
+  const draftRoomUrl = useMemo(
+    () => `https://www63.myfantasyleague.com/${year}/options?L=${LEAGUE_ID}&O=17`,
+    [year]
+  );
+  const leagueHomeUrl = useMemo(
+    () => `https://www63.myfantasyleague.com/${year}/home/${LEAGUE_ID}`,
+    [year]
+  );
 
   async function safeLoad(key, loader) {
     try {
@@ -84,13 +76,7 @@ export default function LockerRoom() {
       }
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
-      const msg = String(e?.message || "");
-      if (key === "matchups" && /404/.test(msg)) {
-        setMatchups([]); // treat 404 as "no matchups yet"
-        setErrors((prev) => ({ ...prev, [key]: "" }));
-      } else {
-        setErrors((prev) => ({ ...prev, [key]: msg || "Failed to load" }));
-      }
+      setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
     } finally {
       setLoading((l) => ({ ...l, [key]: false }));
     }
@@ -104,8 +90,9 @@ export default function LockerRoom() {
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
   }, []);
 
-  // fetch league meta (for franchises + baseURL). Do it always once to get baseURL.
+  // fetch league meta (for selector) if we don't yet know franchise
   useEffect(() => {
+    if (franchiseId) return;
     setLoading((l) => ({ ...l, leagueMeta: true }));
     (async () => {
       const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}`, { cache: "no-store" });
@@ -118,7 +105,7 @@ export default function LockerRoom() {
       setLeagueMeta(data);
       setLoading((l) => ({ ...l, leagueMeta: false }));
     })();
-  }, []);
+  }, [franchiseId]);
 
   // fetch roster & matchups when we know franchise id
   useEffect(() => {
@@ -126,19 +113,36 @@ export default function LockerRoom() {
 
     setLoading((l) => ({ ...l, roster: true, matchups: true }));
 
-    safeLoad("roster", () =>
-      apiGet(`/roster?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}`)
-    );
+    safeLoad("roster", async () => {
+      try {
+        return await apiGet(`/roster?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}`);
+      } catch (e) {
+        // if roster endpoint isn't ready, show empty instead of a scary error
+        if (String(e).includes("HTTP 404")) return { players: [] };
+        throw e;
+      }
+    });
 
-    safeLoad("matchups", () =>
-      apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`)
-    );
+    safeLoad("matchups", async () => {
+      try {
+        return await apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`);
+      } catch (e) {
+        // Swallow 404s -> treat as "no matchups set yet"
+        if (String(e).includes("HTTP 404")) return [];
+        throw e;
+      }
+    });
 
     // live refresh
     const t = setInterval(() => {
-      safeLoad("matchups", () =>
-        apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`)
-      );
+      safeLoad("matchups", async () => {
+        try {
+          return await apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`);
+        } catch (e) {
+          if (String(e).includes("HTTP 404")) return [];
+          throw e;
+        }
+      });
       safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     }, 30000);
     return () => clearInterval(t);
@@ -305,12 +309,11 @@ export default function LockerRoom() {
           <div>Pick your team above to see your matchup.</div>
         ) : loading.matchups ? (
           <div>Loading matchups…</div>
+        ) : errors.matchups && Array.isArray(myMatchups) ? (
+          // If we already coerced 404 -> [], don't show the scary error
+          <div>No matchups set yet.</div>
         ) : errors.matchups ? (
-          /404/.test(String(errors.matchups)) ? (
-            <div>No matchups set yet.</div>
-          ) : (
-            <div style={styles.err}>Error: {errors.matchups}</div>
-          )
+          <div style={styles.err}>Error: {errors.matchups}</div>
         ) : !Array.isArray(myMatchups) || myMatchups.length === 0 ? (
           <div>No matchups set yet.</div>
         ) : (
@@ -423,6 +426,7 @@ function PollBlock({ poll, loading, error }) {
   );
 }
 
+/* ------------------- styles -------------------- */
 const styles = {
   page: {
     maxWidth: 1000,
@@ -450,6 +454,7 @@ const styles = {
   bannerLoading: { opacity: 0.8 },
   bannerError: { color: "#b91c1c" },
   quick: { display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" },
+
   linkBtn: {
     padding: "8px 12px",
     borderRadius: 8,
@@ -464,10 +469,12 @@ const styles = {
     background: "#fff",
     color: "#111827",
     textDecoration: "none",
-    border: "1px solid "#111827",
+    border: "1px solid #111827",
   },
+
   err: { color: "#b91c1c" },
   table: { width: "100%", borderCollapse: "collapse" },
+
   rosterGrid: {
     listStyle: "none",
     padding: 0,
@@ -493,6 +500,7 @@ const styles = {
   },
   playerMeta: { color: "#6b7280", fontSize: 13, marginBottom: 6 },
   playerStats: { display: "flex", gap: 10, fontSize: 13 },
+
   matchupsGrid: {
     display: "grid",
     gap: 10,
@@ -511,6 +519,7 @@ const styles = {
   score: { fontSize: 20 },
   vs: { textAlign: "center", color: "#6b7280" },
   metaLine: { color: "#6b7280", fontSize: 12, textAlign: "center", marginTop: 4 },
+
   badge: {
     display: "inline-block",
     padding: "4px 8px",
@@ -519,6 +528,7 @@ const styles = {
     borderRadius: 999,
     fontSize: 12,
   },
+
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
