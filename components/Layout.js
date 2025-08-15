@@ -141,7 +141,7 @@ export default function Layout({ children }) {
       {/* Sticky nav */}
       <header style={styles.header}>
         <nav style={styles.nav}>
-          <Link href="/" style={styles.brand}>Barracks Fantasy</Link>
+          <Link href="/" style={styles.brand}>Football Forever</Link>
           <div style={styles.row}>
             {/* Only the pages you asked for */}
             <Link href="/" style={{
