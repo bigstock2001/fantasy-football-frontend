@@ -2,9 +2,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Section from "../components/Section";
 import MessageBoard from "../components/MessageBoard";
-import { apiGet } from "../lib/api"; // expects apiGet(path) -> JSON (base URL handled in lib/api)
+import { apiGet } from "../lib/api";
 
 const LEAGUE_ID = "61408";
+const MFL_YEAR = Number(process.env.NEXT_PUBLIC_MFL_YEAR || "2025");
+const MFL_FALLBACK_BASE =
+  process.env.NEXT_PUBLIC_MFL_BASE || "https://www45.myfantasyleague.com";
 
 // --- helpers ---------------------------------------------------------
 function readCookie(name) {
@@ -31,7 +34,7 @@ export default function LockerRoom() {
   const [poll, setPoll] = useState(null);
   const [countdown, setCountdown] = useState(null);
 
-  const [leagueMeta, setLeagueMeta] = useState(null); // franchises (for selector)
+  const [leagueMeta, setLeagueMeta] = useState(null); // franchises + baseURL
   const [franchiseId, setFranchiseId] = useState(null);
 
   const [errors, setErrors] = useState({});
@@ -45,21 +48,26 @@ export default function LockerRoom() {
     leagueMeta: false,
   });
 
+  // Compute the MFL base host we should use for links
+  const mflBase = useMemo(
+    () => leagueMeta?.league?.baseURL || MFL_FALLBACK_BASE,
+    [leagueMeta]
+  );
+
+  const draftRoomUrl = useMemo(
+    () => `${mflBase}/${MFL_YEAR}/options?L=${LEAGUE_ID}&O=17`,
+    [mflBase]
+  );
+  const leagueHomeUrl = useMemo(
+    () => `${mflBase}/${MFL_YEAR}/home/${LEAGUE_ID}`,
+    [mflBase]
+  );
+
   // boot franchise id from cookie
   useEffect(() => {
     const fid = readCookie("ffd_franchise") || readCookie("franchiseId") || null;
     setFranchiseId(fid);
   }, []);
-
-  const year = useMemo(() => new Date().getFullYear(), []);
-  const draftRoomUrl = useMemo(
-    () => `https://www63.myfantasyleague.com/${year}/options?L=${LEAGUE_ID}&O=17`,
-    [year]
-  );
-  const leagueHomeUrl = useMemo(
-    () => `https://www63.myfantasyleague.com/${year}/home/${LEAGUE_ID}`,
-    [year]
-  );
 
   async function safeLoad(key, loader) {
     try {
@@ -77,9 +85,8 @@ export default function LockerRoom() {
       setErrors((e) => ({ ...e, [key]: "" }));
     } catch (e) {
       const msg = String(e?.message || "");
-      // Normalize 404 on matchups to "no matchups yet"
       if (key === "matchups" && /404/.test(msg)) {
-        setMatchups([]); // treat 404 as empties
+        setMatchups([]); // treat 404 as "no matchups yet"
         setErrors((prev) => ({ ...prev, [key]: "" }));
       } else {
         setErrors((prev) => ({ ...prev, [key]: msg || "Failed to load" }));
@@ -97,9 +104,8 @@ export default function LockerRoom() {
     safeLoad("countdown", () => apiGet(`/draft/countdown`));
   }, []);
 
-  // fetch league meta (for selector) if we don't yet know franchise
+  // fetch league meta (for franchises + baseURL). Do it always once to get baseURL.
   useEffect(() => {
-    if (franchiseId) return;
     setLoading((l) => ({ ...l, leagueMeta: true }));
     (async () => {
       const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}`, { cache: "no-store" });
@@ -112,7 +118,7 @@ export default function LockerRoom() {
       setLeagueMeta(data);
       setLoading((l) => ({ ...l, leagueMeta: false }));
     })();
-  }, [franchiseId]);
+  }, []);
 
   // fetch roster & matchups when we know franchise id
   useEffect(() => {
@@ -458,13 +464,10 @@ const styles = {
     background: "#fff",
     color: "#111827",
     textDecoration: "none",
-    border: "1px solid #111827",
+    border: "1px solid "#111827",
   },
   err: { color: "#b91c1c" },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
+  table: { width: "100%", borderCollapse: "collapse" },
   rosterGrid: {
     listStyle: "none",
     padding: 0,
