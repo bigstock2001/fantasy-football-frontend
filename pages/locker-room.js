@@ -22,6 +22,88 @@ function fmtScore(s) {
   return Number.isFinite(Number(s)) ? Number(s).toFixed(1) : s;
 }
 
+/** Coerce various date shapes -> Date (or null) */
+function coerceToDate(val) {
+  if (!val && val !== 0) return null;
+
+  // If object with year/month/day (optionally hour/minute/second)
+  if (typeof val === "object" && !Array.isArray(val)) {
+    const y = val.year ?? val.yy ?? val.y;
+    const mo = val.month ?? val.mm ?? val.m;
+    const d = val.day ?? val.dd ?? val.d;
+    if (y && mo && d) {
+      const H = val.hour ?? val.hh ?? 0;
+      const M = val.minute ?? val.min ?? val.mi ?? 0;
+      const S = val.second ?? val.ss ?? 0;
+      // month: 1-12 -> 0-11
+      const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(H), Number(M), Number(S));
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+  }
+
+  // Numeric epoch (seconds or ms)
+  if (typeof val === "number" || (typeof val === "string" && /^\d+$/.test(val))) {
+    let n = Number(val);
+    if (n < 1e12) n = n * 1000; // seconds -> ms
+    const dt = new Date(n);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // ISO or other date string
+  if (typeof val === "string") {
+    const dt = new Date(val);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  return null;
+}
+
+/** Normalize any countdown payload into { targetDate: ISO, note? } */
+function normalizeCountdown(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  // Common keys we might see
+  const candidates = [
+    raw.targetDate,
+    raw.target_date,
+    raw.date,
+    raw.draftDate,
+    raw.draft_date,
+    raw.when,
+    raw.iso,
+    raw.ts,
+    raw.timestamp,
+    raw.epoch,
+    raw.time,
+    raw.target,
+    raw.datetime,
+    raw.dt,
+    raw, // in case the API returns a bare value
+  ];
+
+  let dt = null;
+  for (const c of candidates) {
+    dt = coerceToDate(c);
+    if (dt) break;
+  }
+
+  // Also try y/m/d-style objects
+  if (!dt) dt = coerceToDate({
+    year: raw.year, month: raw.month, day: raw.day,
+    hour: raw.hour, minute: raw.minute, second: raw.second
+  });
+
+  if (!dt) return null;
+
+  const note =
+    raw.note ||
+    raw.message ||
+    raw.info ||
+    null;
+
+  return { targetDate: dt.toISOString(), note };
+}
+
 /* -------------------- page --------------------- */
 export default function LockerRoom() {
   const [standings, setStandings] = useState(null);
@@ -124,7 +206,27 @@ export default function LockerRoom() {
     safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
     safeLoad("banner", () => apiGet(`/news/commissioner`));
     safeLoad("poll", () => apiGet(`/polls/active`));
-    safeLoad("countdown", () => apiGet(`/draft/countdown`));
+
+    // Normalize countdown payload into {targetDate, note}
+    safeLoad("countdown", async () => {
+      const raw = await apiGet(`/draft/countdown`);
+      const norm = normalizeCountdown(raw);
+      return norm; // may be null if API payload is missing/invalid
+    });
+  }, []);
+
+  // Re-poll the countdown every 60s (in case the date is set/changed)
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const raw = await apiGet(`/draft/countdown`);
+        const norm = normalizeCountdown(raw);
+        setCountdown(norm);
+      } catch {
+        // ignore transient errors
+      }
+    }, 60000);
+    return () => clearInterval(t);
   }, []);
 
   // fetch league meta (for selector) if we don't yet know franchise
@@ -243,7 +345,7 @@ export default function LockerRoom() {
           <div>Loading…</div>
         ) : errors.countdown ? (
           <div style={styles.err}>Error: {errors.countdown}</div>
-        ) : !countdown ? (
+        ) : !countdown?.targetDate ? (
           <div>No draft date set yet. (Admin can set this in the backend.)</div>
         ) : (
           <div>
@@ -572,7 +674,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid #111827", // <-- FIXED: proper string
+    border: "1px solid #111827",
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
