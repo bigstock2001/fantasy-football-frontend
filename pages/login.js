@@ -4,7 +4,6 @@ import { useState } from "react";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  // Optional fallback if a user has no franchiseId yet:
   const [manualFranchise, setManualFranchise] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,7 +19,7 @@ export default function LoginPage() {
     setMsg("");
 
     try {
-      // 1) Authenticate against WordPress via our server-side proxy
+      // 1) WordPress auth via our proxy
       const wpRes = await fetch("/api/wp-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -29,10 +28,11 @@ export default function LoginPage() {
 
       const wpData = await wpRes.json().catch(() => ({}));
       if (!wpRes.ok || !wpData?.ok) {
-        throw new Error(wpData?.error || `Login failed (HTTP ${wpRes.status})`);
+        const detail = wpData?.error || `Login failed (HTTP ${wpRes.status})`;
+        throw new Error(detail);
       }
 
-      // Prefer Franchise ID from WP; fall back to manual input if provided
+      // Prefer Franchise ID from WP; allow manual fallback
       const franchiseId = (wpData.franchiseId || "").trim() || manualFranchise.trim();
       if (!franchiseId) {
         throw new Error(
@@ -40,24 +40,22 @@ export default function LoginPage() {
         );
       }
 
-      // 2) Set our app cookies (ffd_auth, ffd_franchise) via your existing API
+      // 2) Set our app cookies
       const appRes = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Your /api/login accepts { franchiseId } (password check only applies if env LOGIN_PASSWORD is set)
         body: JSON.stringify({ franchiseId }),
       });
-      if (!appRes.ok) {
-        throw new Error(`Could not finalize session (HTTP ${appRes.status})`);
+      const appData = await appRes.json().catch(() => ({}));
+      if (!appRes.ok || appData?.ok === false) {
+        const detail = appData?.error || `Could not finalize session (HTTP ${appRes.status})`;
+        throw new Error(detail);
       }
 
-      // 3) Go where we came from (or to locker-room)
+      // 3) Go to locker room (or back to where we came from)
       window.location.replace(from);
     } catch (err) {
-      setMsg(
-        err?.message ||
-          "Login failed. Check your username/password and try again."
-      );
+      setMsg(err?.message || "Sign-in failed.");
     } finally {
       setBusy(false);
     }
