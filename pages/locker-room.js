@@ -37,7 +37,6 @@ export default function LockerRoom() {
   // Dynamic MFL links (no hard-coded www63)
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const [mflLinks, setMflLinks] = useState(() => ({
-    // Sensible defaults that work even before we fetch baseURL/year
     homeUrl: `https://www.myfantasyleague.com/${currentYear}/home/${LEAGUE_ID}`,
     draftUrl: `https://www.myfantasyleague.com/${currentYear}/options?L=${LEAGUE_ID}&O=17`,
   }));
@@ -74,7 +73,7 @@ export default function LockerRoom() {
         const league = data?.league ?? data;
         const baseURL =
           league?.baseURL ||
-          league?.franchise?.baseURL || // some payloads nest it differently
+          league?.franchise?.baseURL ||
           "https://www.myfantasyleague.com";
         const year =
           league?.history?.league?.year ||
@@ -82,14 +81,14 @@ export default function LockerRoom() {
           currentYear;
 
         const homeUrl = `${baseURL}/${year}/home/${LEAGUE_ID}`;
-        const draftUrl = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17}`;
+        // FIX: removed stray "}" at the end
+        const draftUrl = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17`;
 
         if (alive) {
           setMflLinks({ homeUrl, draftUrl });
           setLinksError("");
         }
       } catch (e) {
-        // keep defaults, just note we used fallback
         if (alive) setLinksError(e?.message || "Failed to load MFL base URL");
       } finally {
         if (alive) setLinksLoading(false);
@@ -158,7 +157,6 @@ export default function LockerRoom() {
       try {
         return await apiGet(`/roster?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}`);
       } catch (e) {
-        // if roster endpoint isn't ready, show empty instead of a scary error
         if (String(e).includes("HTTP 404")) return { players: [] };
         throw e;
       }
@@ -168,13 +166,11 @@ export default function LockerRoom() {
       try {
         return await apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`);
       } catch (e) {
-        // Swallow 404s -> treat as "no matchups set yet"
         if (String(e).includes("HTTP 404")) return [];
         throw e;
       }
     });
 
-    // live refresh
     const t = setInterval(() => {
       safeLoad("matchups", async () => {
         try {
@@ -355,7 +351,6 @@ export default function LockerRoom() {
         ) : loading.matchups ? (
           <div>Loading matchups…</div>
         ) : errors.matchups && Array.isArray(myMatchups) ? (
-          // If we already coerced 404 -> [], don't show the scary error
           <div>No matchups set yet.</div>
         ) : errors.matchups ? (
           <div style={styles.err}>Error: {errors.matchups}</div>
@@ -530,7 +525,8 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
   },
   playerCard: {
-    border: "1px solid "#{"#"}e5e7eb",
+    // FIX: proper string literal for border
+    border: "1px solid #e5e7eb",
     borderRadius: 12,
     padding: 12,
     background: "#fff",
@@ -578,7 +574,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid #111827",
+    border: "1px solid "#111827",
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
