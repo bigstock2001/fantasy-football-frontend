@@ -55,12 +55,8 @@ export default function LockerRoom() {
   const [leagueMeta, setLeagueMeta] = useState(null); // franchises (for selector)
   const [franchiseId, setFranchiseId] = useState(null);
 
-  // Dynamic MFL links (no hard-coded www63)
-  const currentYear = useMemo(() => new Date().getFullYear(), []);
-  const [mflLinks, setMflLinks] = useState(() => ({
-    homeUrl: `https://www.myfantasyleague.com/${currentYear}/home/${LEAGUE_ID}`,
-    draftUrl: `https://www.myfantasyleague.com/${currentYear}/options?L=${LEAGUE_ID}&O=17`,
-  }));
+  // Only need Draft Room link (League Home removed)
+  const [draftUrl, setDraftUrl] = useState(null);
   const [linksLoading, setLinksLoading] = useState(true);
   const [linksError, setLinksError] = useState("");
 
@@ -81,7 +77,7 @@ export default function LockerRoom() {
     setFranchiseId(fid);
   }, []);
 
-  // Fetch MFL league metadata (baseURL + year) to build dynamic links
+  // Build dynamic Draft Room (MFL) link; no League Home link
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -99,17 +95,20 @@ export default function LockerRoom() {
         const year =
           league?.history?.league?.year ||
           league?.year ||
-          currentYear;
+          new Date().getFullYear();
 
-        const homeUrl = `${baseURL}/${year}/home/${LEAGUE_ID}`;
-        const draftUrl = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17`;
+        const draft = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17`;
 
         if (alive) {
-          setMflLinks({ homeUrl, draftUrl });
+          setDraftUrl(draft);
           setLinksError("");
         }
       } catch (e) {
-        if (alive) setLinksError(e?.message || "Failed to load MFL base URL");
+        if (alive) {
+          const y = new Date().getFullYear();
+          setDraftUrl(`https://www.myfantasyleague.com/${y}/options?L=${LEAGUE_ID}&O=17`);
+          setLinksError(e?.message || "Failed to load MFL base URL");
+        }
       } finally {
         if (alive) setLinksLoading(false);
       }
@@ -117,7 +116,7 @@ export default function LockerRoom() {
     return () => {
       alive = false;
     };
-  }, [currentYear]);
+  }, []);
 
   async function safeLoad(key, loader) {
     try {
@@ -262,16 +261,13 @@ export default function LockerRoom() {
         )}
       </div>
 
-      {/* Quick links */}
+      {/* Quick links (League Home removed) */}
       <div style={styles.quick}>
-        <a href={mflLinks.homeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
-          League Home (MFL)
-        </a>
-        <a href={mflLinks.draftUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
+        <a href={draftUrl || "#"} target="_blank" rel="noreferrer" style={styles.linkBtn}>
           Draft Room (MFL)
         </a>
         <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
-        {linksLoading && <span style={styles.linkHint}>Loading league links…</span>}
+        {linksLoading && <span style={styles.linkHint}>Loading draft link…</span>}
         {!linksLoading && linksError && (
           <span style={styles.linkHint}>(using fallback host)</span>
         )}
@@ -535,7 +531,7 @@ const styles = {
   },
   bannerMuted: {
     background: "#f3f4f6",
-    border: "1px solid #e5e7eb",
+    border: "1px solid "#e5e7eb"",
     padding: "10px 12px",
     borderRadius: 10,
     color: "#374151",
