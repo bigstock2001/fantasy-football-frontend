@@ -531,7 +531,7 @@ const styles = {
   },
   bannerMuted: {
     background: "#f3f4f6",
-    border: "1px solid "#e5e7eb"",
+    border: "1px solid #e5e7eb", // <-- fixed quotes
     padding: "10px 12px",
     borderRadius: 10,
     color: "#374151",
