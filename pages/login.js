@@ -4,7 +4,6 @@ import { useState } from "react";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [manualFranchise, setManualFranchise] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -17,45 +16,27 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setMsg("");
-
     try {
-      // 1) WordPress auth via our proxy
-      const wpRes = await fetch("/api/wp-login", {
+      const res = await fetch("/api/wp-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
-      const wpData = await wpRes.json().catch(() => ({}));
-      if (!wpRes.ok || !wpData?.ok) {
-        const detail = wpData?.error || `Login failed (HTTP ${wpRes.status})`;
-        throw new Error(detail);
+      const ct = res.headers.get("content-type") || "";
+      const data = ct.includes("application/json") ? await res.json() : { error: await res.text() };
+
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
       }
 
-      // Prefer Franchise ID from WP; allow manual fallback
-      const franchiseId = (wpData.franchiseId || "").trim() || manualFranchise.trim();
-      if (!franchiseId) {
-        throw new Error(
-          "Your account has no Franchise ID yet. Ask the commish to add one or enter it manually."
-        );
-      }
-
-      // 2) Set our app cookies
-      const appRes = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ franchiseId }),
-      });
-      const appData = await appRes.json().catch(() => ({}));
-      if (!appRes.ok || appData?.ok === false) {
-        const detail = appData?.error || `Could not finalize session (HTTP ${appRes.status})`;
-        throw new Error(detail);
-      }
-
-      // 3) Go to locker room (or back to where we came from)
+      // success: cookies are set by the API route
       window.location.replace(from);
     } catch (err) {
-      setMsg(err?.message || "Sign-in failed.");
+      setMsg(
+        (err && err.message) ||
+          "Login failed. Check your username & password and try again."
+      );
     } finally {
       setBusy(false);
     }
@@ -66,17 +47,18 @@ export default function LoginPage() {
       <div style={styles.card}>
         <h1 style={{ margin: 0, fontSize: 22 }}>Sign in</h1>
         <p style={{ color: "#6b7280", marginTop: 6 }}>
-          Use your WordPress username & password.
+          Use your league website (WordPress) username & password.
         </p>
 
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, marginTop: 14 }}>
           <label style={styles.label}>
-            <span>Username</span>
+            <span>Username or Email</span>
             <input
+              type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               style={styles.input}
-              placeholder="johndoe"
+              placeholder="yourname"
               autoComplete="username"
               required
             />
@@ -95,24 +77,6 @@ export default function LoginPage() {
             />
           </label>
 
-          <details>
-            <summary style={{ cursor: "pointer" }}>No Franchise ID on your account?</summary>
-            <div style={{ marginTop: 8 }}>
-              <label style={styles.label}>
-                <span>Enter Franchise ID (optional fallback)</span>
-                <input
-                  value={manualFranchise}
-                  onChange={(e) => setManualFranchise(e.target.value)}
-                  style={styles.input}
-                  placeholder="e.g. 0007"
-                />
-              </label>
-              <small style={{ color: "#6b7280" }}>
-                Normally this is set on your WordPress user profile by the commissioner.
-              </small>
-            </div>
-          </details>
-
           <button disabled={busy} style={styles.btn}>
             {busy ? "Signing in…" : "Sign in"}
           </button>
@@ -128,8 +92,7 @@ const styles = {
     minHeight: "100vh",
     display: "grid",
     placeItems: "center",
-    background:
-      "linear-gradient(180deg, #0ea5e9 0%, #7c3aed 50%, #111827 100%)",
+    background: "linear-gradient(180deg, #0ea5e9 0%, #7c3aed 50%, #111827 100%)",
   },
   card: {
     width: "min(92vw, 420px)",
