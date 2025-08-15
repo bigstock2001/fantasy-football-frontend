@@ -5,12 +5,12 @@ import React from "react";
 
 const LEAGUE_ID = "61408";
 
-/** Tweak these 4 values to fine-tune the “blueish” vibe */
+// Blue gradient palette
 const COLORS = {
   gradStart: "#60a5fa", // blue-400
   gradMid:   "#3b82f6", // blue-500
   gradEnd:   "#06b6d4", // cyan-500
-  glow:      "rgba(56,189,248,0.55)", // sky-400-ish glow
+  glow:      "rgba(56,189,248,0.55)",
 };
 
 const styles = {
@@ -34,7 +34,7 @@ const styles = {
   header: {
     position: "sticky", top: 0, zIndex: 40,
     borderBottom: "1px solid rgba(255,255,255,0.18)",
-    background: "rgba(2, 22, 50, 0.28)", // subtle translucent overlay to keep text readable
+    background: "rgba(2, 22, 50, 0.28)",
     backdropFilter: "blur(10px)",
   },
   nav: {
@@ -47,7 +47,7 @@ const styles = {
   },
   row: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" },
 
-  // Nav buttons
+  // Buttons/links
   linkBase: {
     display: "inline-block", padding: "8px 12px", borderRadius: 10,
     fontSize: 14, fontWeight: 700, textDecoration: "none",
@@ -63,8 +63,6 @@ const styles = {
     background: "linear-gradient(180deg, rgba(244,63,94,0.95), rgba(244,63,94,0.85))",
     border: "1px solid rgba(244,63,94,0.55)",
   },
-
-  main: { maxWidth: 1120, margin: "0 auto", padding: "24px 16px" },
 };
 
 function NavButton({ href, label, active, extraStyle }) {
@@ -90,16 +88,10 @@ function NavButton({ href, label, active, extraStyle }) {
 export default function Layout({ children }) {
   const router = useRouter();
 
-  // Only on /locker-room, compute live MFL links so they’re handy in the nav too
-  const [mfl, setMfl] = React.useState({
-    homeUrl: null,
-    draftUrl: null,
-    loading: router.pathname === "/locker-room",
-  });
-
+  // Build Draft Room (MFL) link; keep League Home removed.
+  const [draftUrl, setDraftUrl] = React.useState(null);
   React.useEffect(() => {
     let alive = true;
-    if (router.pathname !== "/locker-room") return;
     (async () => {
       try {
         const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}&JSON=1`, { cache: "no-store" });
@@ -113,26 +105,19 @@ export default function Layout({ children }) {
           league?.history?.league?.year ||
           league?.year ||
           new Date().getFullYear();
-
-        const homeUrl = `${baseURL}/${year}/home/${LEAGUE_ID}`;
-        const draftUrl = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17`;
-        if (alive) setMfl({ homeUrl, draftUrl, loading: false });
+        const url = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17`;
+        if (alive) setDraftUrl(url);
       } catch {
         const y = new Date().getFullYear();
-        const host = "https://www.myfantasyleague.com";
-        if (alive) setMfl({
-          homeUrl: `${host}/${y}/home/${LEAGUE_ID}`,
-          draftUrl: `${host}/${y}/options?L=${LEAGUE_ID}&O=17`,
-          loading: false,
-        });
+        setDraftUrl(`https://www.myfantasyleague.com/${y}/options?L=${LEAGUE_ID}&O=17`);
       }
     })();
     return () => { alive = false; };
-  }, [router.pathname]);
+  }, []);
 
   return (
     <div style={styles.appWrap}>
-      {/* Blue gradient background */}
+      {/* Background */}
       <div style={styles.bgRoot} aria-hidden>
         <div style={styles.bgMain} />
         <div style={styles.bgGlow} />
@@ -141,15 +126,19 @@ export default function Layout({ children }) {
       {/* Sticky nav */}
       <header style={styles.header}>
         <nav style={styles.nav}>
+          {/* Brand -> Home ("/") */}
           <Link href="/" style={styles.brand}>Football Forever</Link>
+
           <div style={styles.row}>
-            {/* Only the pages you asked for */}
+            {/* Home ("/") */}
             <Link href="/" style={{
               ...styles.linkBase,
               ...(router.pathname === "/" ? styles.linkActive : null),
             }}>
               Home
             </Link>
+
+            {/* Primary pages */}
             <Link href="/locker-room" style={{
               ...styles.linkBase,
               ...(router.pathname === "/locker-room" ? styles.linkActive : null),
@@ -157,20 +146,33 @@ export default function Layout({ children }) {
               Locker Room
             </Link>
 
-            {/* Show MFL shortcuts only when on Locker Room */}
-            {router.pathname === "/locker-room" && (
-              <>
-                <NavButton href={mfl.homeUrl || "#"} label="League Home (MFL)" />
-                <NavButton href={mfl.draftUrl || "#"} label="Draft Room (MFL)" />
-              </>
+            <Link href="/stats" style={{
+              ...styles.linkBase,
+              ...(router.pathname === "/stats" ? styles.linkActive : null),
+            }}>
+              Stats
+            </Link>
+
+            <Link href="/trophies" style={{
+              ...styles.linkBase,
+              ...(router.pathname === "/trophies" ? styles.linkActive : null),
+            }}>
+              Trophies
+            </Link>
+
+            {/* MFL shortcuts — keep ONLY Draft Room per your request */}
+            {draftUrl && (
+              <NavButton href={draftUrl} label="Draft Room (MFL)" />
             )}
 
+            {/* Logout */}
             <NavButton href="/api/logout" label="Logout" extraStyle={styles.logoutBtn} />
           </div>
         </nav>
       </header>
 
-      <main style={styles.main}>{children}</main>
+      {/* Page content */}
+      <main style={{ maxWidth: 1120, margin: "0 auto", padding: "24px 16px" }}>{children}</main>
     </div>
   );
 }
