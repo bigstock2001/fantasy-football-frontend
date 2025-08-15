@@ -1,11 +1,9 @@
 // pages/_app.js
-import React from "react";
-import Layout from "../components/Layout";
+import "@/styles/globals.css";
+import Layout from "@/components/Layout";
 
-export default function MyApp({ Component, pageProps }) {
-  return (
-    <Layout>
-      <Component {...pageProps} />
-    </Layout>
-  );
+export default function App({ Component, pageProps }) {
+  // If a page opts out, it can export getLayout
+  const getLayout = Component.getLayout || ((page) => <Layout>{page}</Layout>);
+  return getLayout(<Component {...pageProps} />);
 }

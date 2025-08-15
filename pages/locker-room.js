@@ -34,6 +34,16 @@ export default function LockerRoom() {
   const [leagueMeta, setLeagueMeta] = useState(null); // franchises (for selector)
   const [franchiseId, setFranchiseId] = useState(null);
 
+  // Dynamic MFL links (no hard-coded www63)
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const [mflLinks, setMflLinks] = useState(() => ({
+    // Sensible defaults that work even before we fetch baseURL/year
+    homeUrl: `https://www.myfantasyleague.com/${currentYear}/home/${LEAGUE_ID}`,
+    draftUrl: `https://www.myfantasyleague.com/${currentYear}/options?L=${LEAGUE_ID}&O=17`,
+  }));
+  const [linksLoading, setLinksLoading] = useState(true);
+  const [linksError, setLinksError] = useState("");
+
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState({
     standings: true,
@@ -51,15 +61,44 @@ export default function LockerRoom() {
     setFranchiseId(fid);
   }, []);
 
-  const year = useMemo(() => new Date().getFullYear(), []);
-  const draftRoomUrl = useMemo(
-    () => `https://www63.myfantasyleague.com/${year}/options?L=${LEAGUE_ID}&O=17`,
-    [year]
-  );
-  const leagueHomeUrl = useMemo(
-    () => `https://www63.myfantasyleague.com/${year}/home/${LEAGUE_ID}`,
-    [year]
-  );
+  // Fetch MFL league metadata (baseURL + year) to build dynamic links
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLinksLoading(true);
+        const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}&JSON=1`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        const league = data?.league ?? data;
+        const baseURL =
+          league?.baseURL ||
+          league?.franchise?.baseURL || // some payloads nest it differently
+          "https://www.myfantasyleague.com";
+        const year =
+          league?.history?.league?.year ||
+          league?.year ||
+          currentYear;
+
+        const homeUrl = `${baseURL}/${year}/home/${LEAGUE_ID}`;
+        const draftUrl = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17}`;
+
+        if (alive) {
+          setMflLinks({ homeUrl, draftUrl });
+          setLinksError("");
+        }
+      } catch (e) {
+        // keep defaults, just note we used fallback
+        if (alive) setLinksError(e?.message || "Failed to load MFL base URL");
+      } finally {
+        if (alive) setLinksLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [currentYear]);
 
   async function safeLoad(key, loader) {
     try {
@@ -95,15 +134,17 @@ export default function LockerRoom() {
     if (franchiseId) return;
     setLoading((l) => ({ ...l, leagueMeta: true }));
     (async () => {
-      const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}`, { cache: "no-store" });
-      if (!res.ok) {
-        setErrors((e) => ({ ...e, leagueMeta: `HTTP ${res.status}` }));
+      try {
+        const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}&JSON=1`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setLeagueMeta(data);
+        setErrors((e) => ({ ...e, leagueMeta: "" }));
+      } catch (err) {
+        setErrors((e) => ({ ...e, leagueMeta: err?.message || "Failed to load teams" }));
+      } finally {
         setLoading((l) => ({ ...l, leagueMeta: false }));
-        return;
       }
-      const data = await res.json();
-      setLeagueMeta(data);
-      setLoading((l) => ({ ...l, leagueMeta: false }));
     })();
   }, [franchiseId]);
 
@@ -179,13 +220,17 @@ export default function LockerRoom() {
 
       {/* Quick links */}
       <div style={styles.quick}>
-        <a href={leagueHomeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
+        <a href={mflLinks.homeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
           League Home (MFL)
         </a>
-        <a href={draftRoomUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
+        <a href={mflLinks.draftUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
           Draft Room (MFL)
         </a>
         <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
+        {linksLoading && <span style={styles.linkHint}>Loading league links…</span>}
+        {!linksLoading && linksError && (
+          <span style={styles.linkHint}>(using fallback host)</span>
+        )}
       </div>
 
       {/* Countdown */}
@@ -471,6 +516,7 @@ const styles = {
     textDecoration: "none",
     border: "1px solid #111827",
   },
+  linkHint: { alignSelf: "center", color: "#6b7280", fontSize: 12 },
 
   err: { color: "#b91c1c" },
   table: { width: "100%", borderCollapse: "collapse" },
@@ -484,7 +530,7 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
   },
   playerCard: {
-    border: "1px solid #e5e7eb",
+    border: "1px solid "#{"#"}e5e7eb",
     borderRadius: 12,
     padding: 12,
     background: "#fff",
