@@ -263,18 +263,9 @@ export default function LockerRoom() {
       </div>
 
       {/* Quick links */}
-      {/* Quick links (League Home removed) */}
-<div style={styles.quick}>
-  <a href={mflLinks?.draftUrl || "#"} target="_blank" rel="noreferrer" style={styles.linkBtn}>
-    Draft Room (MFL)
-  </a>
-  <a href="/api/logout" style={styles.linkBtnOutline}>Logout</a>
-  {linksLoading && <span style={styles.linkHint}>Loading league links…</span>}
-  {!linksLoading && linksError && (
-    <span style={styles.linkHint}>(using fallback host)</span>
-  )}
-</div>
-
+      <div style={styles.quick}>
+        <a href={mflLinks.homeUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
+          League Home (MFL)
         </a>
         <a href={mflLinks.draftUrl} target="_blank" rel="noreferrer" style={styles.linkBtn}>
           Draft Room (MFL)
