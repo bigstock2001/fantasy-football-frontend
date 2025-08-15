@@ -22,158 +22,26 @@ function fmtScore(s) {
   return Number.isFinite(Number(s)) ? Number(s).toFixed(1) : s;
 }
 
-function getDebugFlag() {
-  if (typeof window === "undefined") return false;
-  try {
-    const usp = new URLSearchParams(window.location.search);
-    return usp.has("debug");
-  } catch {
-    return false;
-  }
+/** Build a local Date (uses the viewer's local timezone) */
+function makeLocalDate({ year, month, day, hour = 0, minute = 0, second = 0 }) {
+  return new Date(year, month - 1, day, hour, minute, second, 0);
 }
 
-/** Parse a variety of date strings safely (strips TZ abbrevs like CT/CDT/EST first) */
-function parseDateStringLoose(str) {
-  if (typeof str !== "string") return null;
-  const cleaned = str
-    .replace(/\b(CT|CST|CDT|ET|EST|EDT|MT|MST|MDT|PT|PST|PDT)\b/gi, "") // drop abbrevs
-    .replace(/,\s+/g, ", ") // normalize commas
-    .trim();
-
-  // ISO-ish first attempt
-  const isoTry = new Date(cleaned);
-  if (!isNaN(isoTry.getTime())) return isoTry;
-
-  // YYYY-MM-DD [HH:MM[:SS]]
-  let m = cleaned.match(
-    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
-  );
-  if (m) {
-    const [, y, mo, d, H = "0", Mi = "0", S = "0"] = m;
-    const dt = new Date(+y, +mo - 1, +d, +H, +Mi, +S);
-    return isNaN(dt.getTime()) ? null : dt;
+/** Get the next occurrence of Aug 28 @ 2:30 PM in local time (this year or next) */
+function getNextDraftDateLocal() {
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  let dt = makeLocalDate({ year: thisYear, month: 8, day: 28, hour: 14, minute: 30 });
+  if (dt.getTime() <= now.getTime()) {
+    dt = makeLocalDate({ year: thisYear + 1, month: 8, day: 28, hour: 14, minute: 30 });
   }
-
-  // MM/DD/YYYY [HH:MM] [AM/PM]
-  m = cleaned.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i
-  );
-  if (m) {
-    let [, mo, d, y, H = "0", Mi = "0", ampm] = m;
-    let hour = +H;
-    if (ampm) {
-      const up = ampm.toUpperCase();
-      if (up === "PM" && hour < 12) hour += 12;
-      if (up === "AM" && hour === 12) hour = 0;
-    }
-    const dt = new Date(+y, +mo - 1, +d, hour, +Mi, 0);
-    return isNaN(dt.getTime()) ? null : dt;
-  }
-
-  // "Aug 14, 2025 7:00 PM" (let Date try again after cleaning)
-  const fallback = new Date(cleaned);
-  return isNaN(fallback.getTime()) ? null : fallback;
+  return dt;
 }
 
-/** Try to coerce many forms to a Date (or null) */
-function coerceToDate(val) {
-  if (val === null || val === undefined) return null;
-
-  // Numeric epoch (seconds or ms)
-  if (typeof val === "number" || (typeof val === "string" && /^\d+$/.test(val))) {
-    let n = Number(val);
-    if (n < 1e12) n *= 1000; // seconds -> ms
-    const dt = new Date(n);
-    return isNaN(dt.getTime()) ? null : dt;
-  }
-
-  // String formats
-  if (typeof val === "string") {
-    return parseDateStringLoose(val);
-  }
-
-  // Object with year/month/day (optionally hour/minute/second)
-  if (typeof val === "object") {
-    const y = val.year ?? val.yy ?? val.y;
-    const mo = val.month ?? val.mm ?? val.m;
-    const d = val.day ?? val.dd ?? val.d;
-    if (y && mo && d) {
-      const H = val.hour ?? val.hh ?? 0;
-      const Mi = val.minute ?? val.min ?? val.mi ?? 0;
-      const S = val.second ?? val.ss ?? 0;
-      const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(H), Number(Mi), Number(S));
-      return isNaN(dt.getTime()) ? null : dt;
-    }
-  }
-
-  return null;
-}
-
-/** Normalize any countdown payload into { targetDate: ISO, note? } */
-function normalizeCountdown(raw) {
-  if (raw === null || raw === undefined) return null;
-
-  // Unwrap common wrappers
-  let payload = raw;
-  if (typeof payload === "object") {
-    if (Array.isArray(payload) && payload.length > 0) {
-      payload = payload[0];
-    } else if ("data" in payload && payload.data) {
-      payload = payload.data;
-    } else if ("countdown" in payload && payload.countdown) {
-      payload = payload.countdown;
-    }
-  }
-
-  // Direct date candidates
-  const candidates = [];
-  if (typeof payload === "object") {
-    candidates.push(
-      payload.targetDate,
-      payload.target_date,
-      payload.date,
-      payload.draftDate,
-      payload.draft_date,
-      payload.when,
-      payload.iso,
-      payload.ts,
-      payload.timestamp,
-      payload.epoch,
-      payload.time,
-      payload.target,
-      payload.datetime,
-      payload.dt
-    );
-  } else {
-    // bare value (string/number)
-    candidates.push(payload);
-  }
-
-  let dt = null;
-  for (const c of candidates) {
-    dt = coerceToDate(c);
-    if (dt) break;
-  }
-
-  // Try y/m/d object fallback
-  if (!dt && typeof payload === "object") {
-    dt = coerceToDate({
-      year: payload.year,
-      month: payload.month,
-      day: payload.day,
-      hour: payload.hour,
-      minute: payload.minute,
-      second: payload.second,
-    });
-  }
-
-  if (!dt) return null;
-
-  const note =
-    (typeof payload === "object" && (payload.note || payload.message || payload.info)) || null;
-
-  return { targetDate: dt.toISOString(), note };
-}
+/** Toggle static draft date (no API) */
+const USE_STATIC_DRAFT_DATE = true;
+/** <<< HARD-WIRED DRAFT DATE >>> */
+const STATIC_DRAFT_DATE = getNextDraftDateLocal();
 
 /* -------------------- page --------------------- */
 export default function LockerRoom() {
@@ -183,7 +51,6 @@ export default function LockerRoom() {
   const [banner, setBanner] = useState(null);
   const [poll, setPoll] = useState(null);
   const [countdown, setCountdown] = useState(null);
-  const [rawCountdown, setRawCountdown] = useState(null); // DEBUG: show raw payload
 
   const [leagueMeta, setLeagueMeta] = useState(null); // franchises (for selector)
   const [franchiseId, setFranchiseId] = useState(null);
@@ -208,90 +75,11 @@ export default function LockerRoom() {
     leagueMeta: false,
   });
 
-  const debug = useMemo(getDebugFlag, []);
-
-  async function safeLoad(key, loader) {
-    try {
-      const data = await loader();
-      switch (key) {
-        case "standings": setStandings(data); break;
-        case "roster": setRoster(data); break;
-        case "matchups": setMatchups(data); break;
-        case "banner": setBanner(data); break;
-        case "poll": setPoll(data); break;
-        case "countdown": setCountdown(data); break;
-        case "leagueMeta": setLeagueMeta(data); break;
-        default: break;
-      }
-      setErrors((e) => ({ ...e, [key]: "" }));
-    } catch (e) {
-      setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
-    } finally {
-      setLoading((l) => ({ ...l, [key]: false }));
-    }
-  }
-
   // boot franchise id from cookie
   useEffect(() => {
     const fid = readCookie("ffd_franchise") || readCookie("franchiseId") || null;
     setFranchiseId(fid);
   }, []);
-
-  // initial fetches that don't depend on franchise
-  useEffect(() => {
-    safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
-    safeLoad("banner", () => apiGet(`/news/commissioner`));
-    safeLoad("poll", () => apiGet(`/polls/active`));
-
-    // Countdown load + normalize
-    (async () => {
-      try {
-        const raw = await apiGet(`/draft/countdown`);
-        setRawCountdown(raw); // DEBUG
-        const norm = normalizeCountdown(raw);
-        setCountdown(norm);
-        setErrors((e) => ({ ...e, countdown: "" }));
-      } catch (err) {
-        setErrors((e) => ({ ...e, countdown: err?.message || "Failed to load countdown" }));
-      } finally {
-        setLoading((l) => ({ ...l, countdown: false }));
-      }
-    })();
-  }, []);
-
-  // Re-poll the countdown every 60s (in case the date is set/changed)
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const raw = await apiGet(`/draft/countdown`);
-        setRawCountdown(raw); // DEBUG
-        const norm = normalizeCountdown(raw);
-        setCountdown(norm);
-      } catch {
-        // ignore transient errors
-      }
-    }, 60000);
-    return () => clearInterval(t);
-  }, []);
-
-  // fetch league meta (for selector) if we don't yet know franchise
-  useEffect(() => {
-    if (franchiseId) return;
-    setLoading((l) => ({ ...l, leagueMeta: true }));
-    (async () => {
-      try {
-        const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}&JSON=1`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setLeagueMeta(data);
-        setErrors((e) => ({ ...e, leagueMeta: "" }));
-      } catch (err) {
-        setErrors((e) => ({ ...e, leagueMeta: err?.message || "Failed to load teams" }));
-      } finally {
-        setLoading((l) => ({ ...l, leagueMeta: false }));
-      }
-    })();
-  }, [franchiseId]);
 
   // Fetch MFL league metadata (baseURL + year) to build dynamic links
   useEffect(() => {
@@ -331,6 +119,79 @@ export default function LockerRoom() {
     };
   }, [currentYear]);
 
+  async function safeLoad(key, loader) {
+    try {
+      const data = await loader();
+      switch (key) {
+        case "standings": setStandings(data); break;
+        case "roster": setRoster(data); break;
+        case "matchups": setMatchups(data); break;
+        case "banner": setBanner(data); break;
+        case "poll": setPoll(data); break;
+        case "countdown": setCountdown(data); break;
+        case "leagueMeta": setLeagueMeta(data); break;
+        default: break;
+      }
+      setErrors((e) => ({ ...e, [key]: "" }));
+    } catch (e) {
+      setErrors((prev) => ({ ...prev, [key]: e?.message || "Failed to load" }));
+    } finally {
+      setLoading((l) => ({ ...l, [key]: false }));
+    }
+  }
+
+  // initial fetches that don't depend on franchise
+  useEffect(() => {
+    safeLoad("standings", () => apiGet(`/standings?leagueId=${LEAGUE_ID}`));
+    safeLoad("banner", () => apiGet(`/news/commissioner`));
+    safeLoad("poll", () => apiGet(`/polls/active`));
+
+    // <<< STATIC COUNTDOWN >>> (no API)
+    if (USE_STATIC_DRAFT_DATE) {
+      setCountdown({
+        targetDate: STATIC_DRAFT_DATE.toISOString(),
+        note: "Hardcoded draft date",
+      });
+      setLoading((l) => ({ ...l, countdown: false }));
+    } else {
+      // fallback to API if you ever switch back
+      safeLoad("countdown", () => apiGet(`/draft/countdown`));
+    }
+  }, []);
+
+  // Re-poll the countdown every 60s ONLY when using API
+  useEffect(() => {
+    if (USE_STATIC_DRAFT_DATE) return; // no polling needed when hard-wired
+    const t = setInterval(async () => {
+      try {
+        const raw = await apiGet(`/draft/countdown`);
+        setCountdown(raw?.targetDate ? raw : null);
+      } catch {
+        // ignore errors on poll
+      }
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  // fetch league meta (for selector) if we don't yet know franchise
+  useEffect(() => {
+    if (franchiseId) return;
+    setLoading((l) => ({ ...l, leagueMeta: true }));
+    (async () => {
+      try {
+        const res = await fetch(`/api/mfl?type=league&L=${LEAGUE_ID}&JSON=1`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setLeagueMeta(data);
+        setErrors((e) => ({ ...e, leagueMeta: "" }));
+      } catch (err) {
+        setErrors((e) => ({ ...e, leagueMeta: err?.message || "Failed to load teams" }));
+      } finally {
+        setLoading((l) => ({ ...l, leagueMeta: false }));
+      }
+    })();
+  }, [franchiseId]);
+
   // fetch roster & matchups when we know franchise id
   useEffect(() => {
     if (!franchiseId) return;
@@ -341,6 +202,7 @@ export default function LockerRoom() {
       try {
         return await apiGet(`/roster?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}`);
       } catch (e) {
+        // if roster endpoint isn't ready, show empty instead of a scary error
         if (String(e).includes("HTTP 404")) return { players: [] };
         throw e;
       }
@@ -350,11 +212,13 @@ export default function LockerRoom() {
       try {
         return await apiGet(`/matchups?leagueId=${LEAGUE_ID}&franchiseId=${franchiseId}&live=1`);
       } catch (e) {
+        // Swallow 404s -> treat as "no matchups set yet"
         if (String(e).includes("HTTP 404")) return [];
         throw e;
       }
     });
 
+    // live refresh
     const t = setInterval(() => {
       safeLoad("matchups", async () => {
         try {
@@ -424,12 +288,6 @@ export default function LockerRoom() {
               : null
         }
       >
-        {debug && (
-          <pre style={styles.debugBox}>
-            {JSON.stringify(rawCountdown, null, 2)}
-          </pre>
-        )}
-
         {loading.countdown ? (
           <div>Loading…</div>
         ) : errors.countdown ? (
@@ -541,6 +399,7 @@ export default function LockerRoom() {
         ) : loading.matchups ? (
           <div>Loading matchups…</div>
         ) : errors.matchups && Array.isArray(myMatchups) ? (
+          // If we already coerced 404 -> [], don't show the scary error
           <div>No matchups set yet.</div>
         ) : errors.matchups ? (
           <div style={styles.err}>Error: {errors.matchups}</div>
@@ -767,18 +626,5 @@ const styles = {
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
-  },
-
-  // Debug box for raw countdown payload (only shows with ?debug=1)
-  debugBox: {
-    fontSize: 12,
-    padding: 8,
-    margin: "0 0 8px",
-    borderRadius: 8,
-    background: "#f3f4f6",
-    border: "1px solid #e5e7eb",
-    color: "#111827",
-    maxHeight: 200,
-    overflow: "auto",
   },
 };
