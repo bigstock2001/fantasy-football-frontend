@@ -81,7 +81,6 @@ export default function LockerRoom() {
           currentYear;
 
         const homeUrl = `${baseURL}/${year}/home/${LEAGUE_ID}`;
-        // FIX: removed stray "}" at the end
         const draftUrl = `${baseURL}/${year}/options?L=${LEAGUE_ID}&O=17`;
 
         if (alive) {
@@ -525,7 +524,6 @@ const styles = {
     gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
   },
   playerCard: {
-    // FIX: proper string literal for border
     border: "1px solid #e5e7eb",
     borderRadius: 12,
     padding: 12,
@@ -574,7 +572,7 @@ const styles = {
   btnPrimary: {
     padding: "8px 12px",
     borderRadius: 8,
-    border: "1px solid "#111827",
+    border: "1px solid #111827", // <-- FIXED: proper string
     background: "#111827",
     color: "#fff",
     cursor: "pointer",
