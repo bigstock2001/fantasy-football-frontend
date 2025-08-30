@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React from "react";
 
-const DRAFT_ROOM_URL = "https://backend.barracksmedia.com/draft-room/";
+const DRAFT_ROOM_URL = "https://backend.footballforeverdynasty.us/draft-room/";
 
 const COLORS = {
   gradStart: "#60a5fa",
@@ -80,7 +80,6 @@ function NavButton({ href, label, active, extraStyle }) {
 
 export default function Layout({ children }) {
   const router = useRouter();
-
   return (
     <div style={styles.appWrap}>
       <div style={styles.bgRoot} aria-hidden>
