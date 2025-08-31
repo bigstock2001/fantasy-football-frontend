@@ -1,12 +1,21 @@
-export const dynamic = "force-dynamic"; // disable Next pre-render cache
+export const dynamic = "force-dynamic"; // disable Next cache
 
 type Player = { id: string; name?: string; position?: string; team?: string };
 type API = { franchises: Record<string, { name: string; icon: string; players: Player[] }> };
 
-function displayName(n?: string) {
-  if (!n) return "";
-  const [last, first] = n.split(",").map(s => s.trim());
-  return first ? `${first} ${last}` : n;
+// ⬇️ ADAPTER: API → shape your UI can use
+function adapt(api: API) {
+  return Object.entries(api.franchises).map(([id, f]) => ({
+    id,
+    title: f.name,
+    icon: f.icon || "",
+    players: f.players.map(p => ({
+      id: p.id,
+      fullName: (p.name ?? "").replace(/^([^,]+),\s*(.+)$/, "$2 $1"), // "Last, First" -> "First Last"
+      pos: p.position ?? "",
+      nfl: p.team ?? "",
+    })),
+  }));
 }
 
 async function getRosters(franchise?: string): Promise<API> {
@@ -25,17 +34,16 @@ async function getRosters(franchise?: string): Promise<API> {
 }
 
 export default async function Page() {
-  // Show all teams; change to "0001" to test one team only
-  const data = await getRosters();
-  const teams = Object.entries(data.franchises).map(([id, f]) => ({ id, ...f }));
+  const api = await getRosters();         // or getRosters("0001") to test one team
+  const teams = adapt(api);               // ⬅️ use the adapter
 
   return (
     <main style={{ padding: 24 }}>
-      <h1 style={{ margin: "0 0 16px", fontSize: 24 }}>League Rosters</h1>
+      <h1 style={{ margin: "0 0 16px" }}>League Rosters</h1>
       {teams.map((t) => (
         <section key={t.id} style={{ marginBottom: 24, border: "1px solid #ddd", borderRadius: 8 }}>
           <header style={{ padding: "10px 12px", background: "#f7f7f9", display: "flex", justifyContent: "space-between" }}>
-            <strong>{t.name}</strong>
+            <strong>{t.title}</strong>
             <a href={`https://www.myfantasyleague.com/2025/options?L=61408&F=${t.id}&O=07`} target="_blank">View on MFL</a>
           </header>
           <div style={{ overflowX: "auto" }}>
@@ -50,9 +58,9 @@ export default async function Page() {
               <tbody>
                 {t.players.map((p) => (
                   <tr key={p.id}>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f1f1" }}>{p.position || ""}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f1f1" }}>{displayName(p.name)}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f1f1f1" }}>{p.team || ""}</td>
+                    <td style={{ padding: 8, borderBottom: "1px solid #f1f1f1" }}>{p.pos}</td>
+                    <td style={{ padding: 8, borderBottom: "1px solid #f1f1f1" }}>{p.fullName}</td>
+                    <td style={{ padding: 8, borderBottom: "1px solid #f1f1f1" }}>{p.nfl}</td>
                   </tr>
                 ))}
               </tbody>
