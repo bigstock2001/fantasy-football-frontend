@@ -1,50 +1,45 @@
-// app/api/mfl/roster/route.js
 import { NextResponse } from "next/server";
 
-export async function GET(req) {
-  const { searchParams } = new URL(req.url);
+const LEAGUE_ID = "61408"; // your MFL league ID
+const BASE_URL = `https://www66.myfantasyleague.com/2025`;
 
-  const base   = process.env.MFL_BASE      || "https://api.myfantasyleague.com";
-  const year   = process.env.MFL_YEAR      || "2025";
-  const league = searchParams.get("leagueId") || process.env.MFL_LEAGUE_ID || "61408";
-  const fran   = searchParams.get("franchiseId"); // optional
-
+export async function GET() {
   try {
-    const url = new URL(`${base}/${year}/export`);
-    url.searchParams.set("TYPE", "rosters");
-    url.searchParams.set("L", league);
-    url.searchParams.set("JSON", "1");
-    if (fran) url.searchParams.set("FRANCHISE", fran);
+    // 1. Get all team rosters
+    const rosterRes = await fetch(`${BASE_URL}/export?TYPE=rosters&L=${LEAGUE_ID}&JSON=1`);
+    const rosterData = await rosterRes.json();
 
-    const r = await fetch(url.toString(), { next: { revalidate: 60 } });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // 2. Get player database
+    const playerRes = await fetch(`${BASE_URL}/export?TYPE=players&L=${LEAGUE_ID}&JSON=1`);
+    const playerData = await playerRes.json();
+    const playerMap = playerData.players.player.reduce((acc, player) => {
+      acc[player.id] = player;
+      return acc;
+    }, {});
 
-    const data = await r.json().catch(() => ({}));
-
-    // Map to the minimal shape your UI expects: { players: [...] }
-    const players = [];
-    const franchises = data?.rosters?.franchise;
-    const list = Array.isArray(franchises) ? franchises : franchises ? [franchises] : [];
-
-    for (const f of list) {
-      const ppl = Array.isArray(f.player) ? f.player : f.player ? [f.player] : [];
-      for (const p of ppl) {
-        players.push({
+    // 3. Enrich each team with player names
+    const teams = rosterData.rosters.franchise.map((team) => {
+      const playerList = Array.isArray(team.player) ? team.player : [team.player];
+      const enrichedPlayers = playerList.map((p) => {
+        const info = playerMap[p.id] || { name: "Unknown", position: "?" };
+        return {
           id: p.id,
-          // MFL roster export usually doesn't include name/pos/team; leaving undefined is OK for your UI
-          name: p.name,
-          position: p.position,
-          team: p.team,
-          status: p.status,
-        });
-      }
-    }
+          name: info.name,
+          position: info.position,
+        };
+      });
 
-    return NextResponse.json({ players }, {
-      headers: { "cache-control": "s-maxage=60, stale-while-revalidate=300" },
+      return {
+        id: team.id,
+        name: team.name,
+        owner: team.owner_name || "Unknown",
+        players: enrichedPlayers,
+      };
     });
-  } catch {
-    // Never 404 to the UI—just return an empty list so it shows "No roster yet."
-    return NextResponse.json({ players: [] }, { status: 200 });
+
+    return NextResponse.json({ teams });
+  } catch (err) {
+    console.error("Roster fetch failed:", err);
+    return NextResponse.json({ error: "Failed to fetch roster" }, { status: 500 });
   }
 }
