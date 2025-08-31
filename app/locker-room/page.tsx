@@ -22,7 +22,8 @@ export default function LockerRoomPage() {
         try {
           const res = await fetch("https://backend.footballforeverdynasty.us/wp-json/league-api/v1/rosters");
           const data: Team[] = await res.json();
-          const team = data.find((t) => t.owner.toLowerCase() === session.user.email?.toLowerCase());
+
+          const team = data.find((t) => t.owner.toLowerCase() === session?.user?.email?.toLowerCase());
 
           if (team) {
             setMyTeam(team);
