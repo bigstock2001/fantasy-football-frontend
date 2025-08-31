@@ -1,19 +1,15 @@
-// app/layout.tsx
-import "../styles/globals.css"; // ✅ Adjusted path from './globals.css'
+"use client";
 
-export const metadata = {
-  title: "Fantasy Football",
-  description: "Fantasy Football Locker Room",
-};
+import { SessionProvider } from "next-auth/react";
+import "./globals.css";
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/* Wrap the whole app so useSession() is always defined */}
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }

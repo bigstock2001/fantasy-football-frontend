@@ -2,11 +2,11 @@
 
 import { useSession } from "next-auth/react";
 
+// Prevent build-time prerendering
 export const dynamic = "force-dynamic";
 
 export default function LockerRoomPage() {
-  // Always provide a fallback so destructuring is safe
-  const session = useSession() || { status: "unauthenticated", data: null };
+  const session = useSession?.() ?? { status: "unauthenticated", data: null };
 
   if (session.status === "loading") {
     return <div className="p-6 text-white">Loading your locker room...</div>;
