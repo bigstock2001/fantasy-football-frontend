@@ -1,22 +1,19 @@
 // app/layout.tsx
-import "./globals.css";
-import { SessionProvider } from "next-auth/react";
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import "../styles/globals.css"; // ✅ Adjusted path from './globals.css'
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Fantasy Football Locker Room",
-  description: "Manage your team",
+export const metadata = {
+  title: "Fantasy Football",
+  description: "Fantasy Football Locker Room",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <SessionProvider>{children}</SessionProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
