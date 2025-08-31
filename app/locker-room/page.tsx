@@ -12,7 +12,10 @@ interface Team {
 }
 
 export default function LockerRoomPage() {
-  const { data: session, status } = useSession();
+  const sessionHook = useSession();
+  const session = sessionHook?.data;
+  const status = sessionHook?.status;
+
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [error, setError] = useState("");
 
@@ -23,7 +26,9 @@ export default function LockerRoomPage() {
           const res = await fetch("https://backend.footballforeverdynasty.us/wp-json/league-api/v1/rosters");
           const data: Team[] = await res.json();
 
-          const team = data.find((t) => t.owner.toLowerCase() === session?.user?.email?.toLowerCase());
+          const team = data.find(
+            (t) => t.owner.toLowerCase() === session.user!.email!.toLowerCase()
+          );
 
           if (team) {
             setMyTeam(team);
@@ -41,7 +46,7 @@ export default function LockerRoomPage() {
   }, [session, status]);
 
   if (status === "loading") {
-    return <div className="text-white p-6">Loading...</div>;
+    return <div className="text-white p-6">Loading session...</div>;
   }
 
   if (error) {
