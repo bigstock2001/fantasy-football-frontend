@@ -3,51 +3,49 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
+interface Team {
+  name: string;
+  owner: string;
+  players: string[];
+}
+
 export default function LockerRoomPage() {
-  const { data: session, status } = useSession();
-  const [myTeam, setMyTeam] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data: session } = useSession();
+  const [myTeam, setMyTeam] = useState<Team | null>(null);
 
   useEffect(() => {
-    const fetchRoster = async () => {
-      const res = await fetch("/api/mfl/roster");
-      const data = await res.json();
+    if (!session?.user?.email) return;
 
-      // Match team by owner name
-      const myTeam = data.teams.find((team) =>
-        team.owner?.toLowerCase().includes(session?.user?.name?.toLowerCase())
-      );
+    const fetchData = async () => {
+      try {
+        const res = await fetch("https://backend.footballforeverdynasty.us/wp-json/league-api/v1/rosters");
+        const data: Team[] = await res.json();
 
-      setMyTeam(myTeam);
-      setLoading(false);
+        const filteredTeam = data.find((team) => team.owner === session.user.email);
+        setMyTeam(filteredTeam ?? null);
+      } catch (error) {
+        console.error("Error fetching team data:", error);
+      }
     };
 
-    if (status === "authenticated") {
-      fetchRoster();
-    }
-  }, [status, session?.user?.name]);
-
-  if (status === "loading" || loading) return <div className="text-white">Loading roster...</div>;
-
-  if (!myTeam) return <div className="text-red-500">Roster not found for your account.</div>;
+    fetchData();
+  }, [session]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex justify-center py-12 px-4">
-      <div className="bg-gray-800 rounded-xl p-6 shadow-xl max-w-xl w-full">
-        <h2 className="text-2xl font-bold mb-2">{myTeam.name}</h2>
-        <p className="text-sm text-gray-400 mb-4">Owner: {myTeam.owner}</p>
-        <ul className="space-y-2">
-          {myTeam.players.map((player) => (
-            <li
-              key={player.id}
-              className="bg-gray-700 px-4 py-2 rounded-md shadow-sm flex justify-between"
-            >
-              <span>{player.name}</span>
-              <span className="text-gray-400">{player.position}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {myTeam ? (
+        <div className="bg-gray-800 rounded-xl p-6 shadow-xl max-w-xl w-full">
+          <h2 className="text-2xl font-bold mb-2">{myTeam.name}</h2>
+          <p className="text-sm text-gray-400 mb-4">Owner: {myTeam.owner}</p>
+          <ul className="space-y-2">
+            {myTeam.players.map((player, index) => (
+              <li key={index} className="border-b border-gray-700 pb-2">{player}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-white/80">Loading your team...</p>
+      )}
     </div>
   );
 }
