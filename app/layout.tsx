@@ -1,14 +1,16 @@
-"use client";
+import "../styles/globals.css";
+import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 
-import { SessionProvider } from "next-auth/react";
-import "./globals.css";
+export const metadata = {
+  title: "Fantasy Football Frontend",
+  description: "Custom fantasy football site",
+};
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        {/* Wrap the whole app so useSession() is always defined */}
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>
   );

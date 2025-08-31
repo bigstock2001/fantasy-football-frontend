@@ -1,10 +1,14 @@
-/* styles/globals.css */
-html, body, #__next { height: 100%; }
-body { margin: 0; }
-* { box-sizing: border-box; }
+"use client";
 
-/* If using Tailwind, uncomment:
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-*/
+import { SessionProvider } from "next-auth/react";
+import "../styles/globals.css";  // ← fixed path
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
+    </html>
+  );
+}
