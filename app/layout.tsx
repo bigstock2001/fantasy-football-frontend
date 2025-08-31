@@ -1,5 +1,5 @@
 import "../styles/globals.css";
-import SessionProviderWrapper from "@/components/SessionProviderWrapper";
+import SessionProviderWrapper from "../components/SessionProviderWrapper"; // relative path works too
 
 export const metadata = {
   title: "Fantasy Football Frontend",
