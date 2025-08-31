@@ -25,9 +25,8 @@ export default function LockerRoom() {
         );
         const data: Team[] = await res.json();
 
-        const team = data.find(
-          (t) => t.owner.toLowerCase() === session.user!.email.toLowerCase()
-        );
+        const userEmail = session?.user?.email?.toLowerCase();
+        const team = data.find((t) => t.owner?.toLowerCase() === userEmail);
 
         if (team) setMyTeam(team);
       } catch (err) {
