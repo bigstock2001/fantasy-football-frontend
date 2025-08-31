@@ -11,7 +11,8 @@ type Team = {
 };
 
 export default function LockerRoom() {
-  const { data: session } = useSession();
+  const sessionHook = useSession();
+  const session = sessionHook.data;
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,7 +26,7 @@ export default function LockerRoom() {
         );
         const data: Team[] = await res.json();
 
-        const userEmail = session?.user?.email?.toLowerCase();
+        const userEmail = session.user.email.toLowerCase();
         const team = data.find((t) => t.owner?.toLowerCase() === userEmail);
 
         if (team) setMyTeam(team);
