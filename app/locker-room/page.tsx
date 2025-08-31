@@ -5,14 +5,13 @@ import { useSession } from "next-auth/react";
 export const dynamic = "force-dynamic";
 
 export default function LockerRoomPage() {
-  const session = useSession();
+  // Always provide a fallback so destructuring is safe
+  const session = useSession() || { status: "unauthenticated", data: null };
 
-  // Handle loading state
   if (session.status === "loading") {
     return <div className="p-6 text-white">Loading your locker room...</div>;
   }
 
-  // Handle unauthenticated state
   if (!session.data) {
     return (
       <div className="p-6 text-white">
@@ -22,7 +21,6 @@ export default function LockerRoomPage() {
     );
   }
 
-  // Extract user info once we know it's defined
   const { user } = session.data;
 
   return (
