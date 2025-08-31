@@ -4,69 +4,55 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
-interface Team {
+type Team = {
   id: number;
-  name: string;
   owner: string;
   players: string[];
-}
+};
 
-export default function LockerRoomPage() {
-  const sessionHook = useSession();
-  const session = sessionHook?.data;
-  const status = sessionHook?.status;
-
+export default function LockerRoom() {
+  const { data: session } = useSession();
   const [myTeam, setMyTeam] = useState<Team | null>(null);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.email) {
-      const fetchRoster = async () => {
-        try {
-          const res = await fetch("https://backend.footballforeverdynasty.us/wp-json/league-api/v1/rosters");
-          const data: Team[] = await res.json();
+    const fetchTeam = async () => {
+      if (!session?.user?.email) return;
 
-          const team = data.find(
-            (t) => t.owner.toLowerCase() === session.user!.email!.toLowerCase()
-          );
+      try {
+        const res = await fetch(
+          "https://backend.footballforeverdynasty.us/wp-json/league-api/v1/rosters?league_id=61408"
+        );
+        const data: Team[] = await res.json();
 
-          if (team) {
-            setMyTeam(team);
-          } else {
-            setError("No roster found for your account.");
-          }
-        } catch (err) {
-          console.error(err);
-          setError("Failed to load roster.");
-        }
-      };
+        const team = data.find(
+          (t) => t.owner.toLowerCase() === session.user!.email.toLowerCase()
+        );
 
-      fetchRoster();
-    }
-  }, [session, status]);
+        if (team) setMyTeam(team);
+      } catch (err) {
+        console.error("Error fetching team:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  if (status === "loading") {
-    return <div className="text-white p-6">Loading session...</div>;
-  }
+    fetchTeam();
+  }, [session]);
 
-  if (error) {
-    return <div className="text-red-400 p-6">{error}</div>;
-  }
-
-  if (!myTeam) {
-    return <div className="text-white p-6">No roster available yet.</div>;
-  }
+  if (loading) return <div className="p-8 text-white">Loading your team...</div>;
+  if (!myTeam) return <div className="p-8 text-white">No team found for your email.</div>;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex justify-center py-12 px-4">
-      <div className="bg-gray-800 rounded-xl p-6 shadow-xl max-w-xl w-full">
-        <h2 className="text-2xl font-bold mb-2">{myTeam.name}</h2>
-        <p className="text-sm text-gray-400 mb-4">Owner: {myTeam.owner}</p>
-        <ul className="space-y-2">
+    <div className="min-h-screen bg-black text-white p-8">
+      <h1 className="text-4xl font-bold mb-4">🏈 Your Locker Room</h1>
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h2 className="text-2xl font-semibold mb-2">Team Owner: {myTeam.owner}</h2>
+        <p className="mb-2 text-gray-400">Team ID: {myTeam.id}</p>
+        <h3 className="text-xl font-semibold mt-4 mb-2">Players:</h3>
+        <ul className="list-disc list-inside space-y-1">
           {myTeam.players.map((player, index) => (
-            <li key={index} className="bg-gray-700 rounded-md p-2">
-              {player}
-            </li>
+            <li key={index}>{player}</li>
           ))}
         </ul>
       </div>
